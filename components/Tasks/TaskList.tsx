@@ -1,0 +1,620 @@
+
+import React, { useState } from 'react';
+import { Task, TaskDifficulty, EisenhowerQuadrant, TaskImportance, User, CalendarEvent } from '../../types';
+import { storageService } from '../../services/storageService';
+import { geminiService } from '../../services/geminiService';
+import { gamificationService } from '../../services/gamificationService';
+import { taskService } from '../../services/taskService';
+import { 
+  Plus, Trash2, Brain, AlertCircle, Clock, X, Sparkles, 
+  CheckCircle2, Circle, Hourglass, ClipboardList, Edit3, Calendar,
+  Zap
+} from 'lucide-react';
+import { QUADRANT_COLORS } from '../../constants';
+import { motion, AnimatePresence } from 'framer-motion';
+
+import confetti from 'canvas-confetti';
+
+interface TaskListProps {
+  tasks: Task[];
+  calendar: CalendarEvent[];
+  userId: string;
+  onTasksUpdated: () => void;
+  onUserUpdated: (user: User) => void;
+}
+
+export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUserUpdated }: TaskListProps) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [analyzingTaskId, setAnalyzingTaskId] = useState<string | null>(null);
+  const [isBulkAnalyzing, setIsBulkAnalyzing] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [taskType, setTaskType] = useState<'normal' | 'exam'>('normal');
+  const [difficulty, setDifficulty] = useState<TaskDifficulty>(TaskDifficulty.MEDIUM);
+  const [importance, setImportance] = useState<TaskImportance>(TaskImportance.MEDIUM);
+  const [estimatedHours, setEstimatedHours] = useState(1);
+
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [answers, setAnswers] = useState({ urgency: '', importance: '', pressure: '' });
+  const [isClassifying, setIsClassifying] = useState(false);
+
+  const scheduledTaskIds = new Set(calendar.map(e => e.taskId).filter(Boolean));
+
+  const handleAddTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const taskData: Task = {
+      id: editingTask ? editingTask.id : crypto.randomUUID(),
+      userId,
+      title,
+      description,
+      deadline,
+      examDate: taskType === 'exam' ? deadline : undefined,
+      difficulty,
+      importance,
+      estimatedHours,
+      isAnalyzed: editingTask ? editingTask.isAnalyzed : false,
+      isCompleted: editingTask ? editingTask.isCompleted : false,
+      completedAt: editingTask ? editingTask.completedAt : undefined,
+      reasoning: editingTask?.reasoning,
+      createdAt: editingTask ? editingTask.createdAt : Date.now()
+    };
+    
+    storageService.saveTask(taskData);
+    onTasksUpdated();
+    closeForm();
+  };
+
+  const closeForm = () => {
+    setShowAddForm(false);
+    setEditingTask(null);
+    resetForm();
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setDeadline('');
+    setTaskType('normal');
+    setDifficulty(TaskDifficulty.MEDIUM);
+    setImportance(TaskImportance.MEDIUM);
+    setEstimatedHours(1);
+  };
+
+  const startEdit = (task: Task) => {
+    setEditingTask(task);
+    setTitle(task.title);
+    setDescription(task.description);
+    setDeadline(task.deadline);
+    setTaskType(task.examDate ? 'exam' : 'normal');
+    setDifficulty(task.difficulty);
+    setImportance(task.importance);
+    setEstimatedHours(task.estimatedHours);
+    setShowAddForm(true);
+  };
+
+  const handleToggleComplete = (task: Task) => {
+    const isNowCompleted = !task.isCompleted;
+    const updates: Partial<Task> = {
+      isCompleted: isNowCompleted,
+      completedAt: isNowCompleted ? Date.now() : undefined
+    };
+
+    const data = storageService.getData();
+    const taskIndex = data.tasks.findIndex(t => t.id === task.id);
+    if (taskIndex !== -1) {
+      let exp;
+      if (isNowCompleted) {
+        // Calculate after update to get the multiplier for completing
+        data.tasks[taskIndex] = { ...data.tasks[taskIndex], ...updates };
+        exp = gamificationService.calculateTaskExp(data.tasks[taskIndex]);
+      } else {
+        // Calculate before update to get the exact same multiplier that was added
+        exp = gamificationService.calculateTaskExp(data.tasks[taskIndex]);
+        data.tasks[taskIndex] = { ...data.tasks[taskIndex], ...updates };
+      }
+      
+      storageService.saveData(data);
+      const result = gamificationService.updateUserProgress(userId, isNowCompleted ? exp : -exp);
+      
+      if (result.user) {
+        onUserUpdated(result.user);
+        
+        if (isNowCompleted) {
+          // Show Toast
+          setToast({ 
+            message: `+ ${exp} EXP! Bạn đỉnh vãi ${result.user.username} ơi! 🚀`, 
+            type: 'success' 
+          });
+          setTimeout(() => setToast(null), 3000);
+
+          // Confetti
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#f27024', '#3b82f6', '#10b981']
+          });
+
+          if (result.leveledUp) {
+            setTimeout(() => {
+              confetti({
+                particleCount: 200,
+                spread: 100,
+                origin: { y: 0.5 },
+                colors: ['#FFD700', '#f27024']
+              });
+            }, 500);
+          }
+        } else {
+          setToast({ 
+            message: `- ${exp} EXP! Đừng bỏ cuộc nhé! 💪`, 
+            type: 'info' 
+          });
+          setTimeout(() => setToast(null), 3000);
+        }
+      }
+      
+      onTasksUpdated();
+    }
+  };
+
+  const startAnalysis = (task: Task) => {
+    setAnalyzingTaskId(task.id);
+    setAnalysisStep(1);
+  };
+
+  const handleBulkAnalyze = async () => {
+    const tasksToAnalyze = tasks.filter(t => selectedTasks.size > 0 ? selectedTasks.has(t.id) : !t.isAnalyzed);
+    
+    if (tasksToAnalyze.length === 0) {
+      alert("No pending tasks to analyze.");
+      return;
+    }
+
+    setIsBulkAnalyzing(true);
+    try {
+      const results = await geminiService.bulkClassifyTasks(tasksToAnalyze);
+      let totalExp = 0;
+      results.forEach(res => {
+        const task = tasks.find(t => t.id === res.taskId);
+        if (task) {
+          storageService.saveTask({
+            ...task,
+            reasoning: res.reasoning,
+            isAnalyzed: true
+          });
+          totalExp += gamificationService.calculateTaskExp(task);
+        }
+      });
+      
+      if (totalExp > 0) {
+        const result = gamificationService.updateUserProgress(userId, totalExp);
+        if (result.user) {
+          onUserUpdated(result.user);
+          if (result.leveledUp) {
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#f27024', '#3b82f6', '#10b981']
+            });
+          }
+        }
+      }
+      
+      onTasksUpdated();
+      setSelectedTasks(new Set());
+    } catch (err) {
+      console.error(err);
+      alert("AI bulk analysis failed.");
+    }
+    setIsBulkAnalyzing(false);
+  };
+
+  const handleAnalysisSubmit = async () => {
+    setIsClassifying(true);
+    const task = tasks.find(t => t.id === analyzingTaskId);
+    if (task) {
+      try {
+        const result = await geminiService.classifyTask(task, answers);
+        storageService.saveTask({
+          ...task,
+          reasoning: result.reasoning,
+          isAnalyzed: true
+        });
+        
+        // Award EXP
+        const expGain = gamificationService.calculateTaskExp(task);
+        const gamificationResult = gamificationService.updateUserProgress(userId, expGain);
+        if (gamificationResult.user) {
+          onUserUpdated(gamificationResult.user);
+          if (gamificationResult.leveledUp) {
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#f27024', '#3b82f6', '#10b981']
+            });
+          }
+        }
+
+        onTasksUpdated();
+        setAnalyzingTaskId(null);
+        setAnalysisStep(0);
+        setAnswers({ urgency: '', importance: '', pressure: '' });
+      } catch (err) {
+        alert("Classification failed.");
+      }
+    }
+    setIsClassifying(false);
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedTasks);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedTasks(newSet);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Delete this academic record?")) {
+      storageService.deleteTask(id);
+      onTasksUpdated(); 
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Academic Tasks</h1>
+          <p className="text-slate-500 font-medium text-sm">Manage and prioritize your academic workload.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleBulkAnalyze}
+            disabled={isBulkAnalyzing}
+            className="group relative bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-emerald-100 flex items-center gap-2 font-black transition-all disabled:opacity-50 text-xs uppercase tracking-widest overflow-hidden"
+          >
+            {isBulkAnalyzing && (
+              <motion.div 
+                initial={{ x: '-100%' }}
+                animate={{ x: '100%' }}
+                transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"
+              />
+            )}
+            {isBulkAnalyzing ? <Sparkles className="animate-pulse" size={16} /> : <Brain size={16} />}
+            <span>{selectedTasks.size > 0 ? `Process (${selectedTasks.size})` : 'Analyze All Tasks'}</span>
+          </button>
+          <button 
+            onClick={() => setShowAddForm(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-black transition-all text-xs uppercase tracking-widest"
+          >
+            <Plus size={18} />
+            <span>Add Task</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {tasks.length === 0 ? (
+          <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] p-20 text-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <ClipboardList className="text-slate-300" size={32} />
+            </div>
+            <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[10px]">Tasks Empty</p>
+          </div>
+        ) : (
+          tasks.sort((a,b) => b.createdAt - a.createdAt).map(task => {
+            const currentQuadrant = taskService.calculateQuadrant(task);
+            return (
+              <div key={task.id} className={`bg-white p-6 rounded-[1.5rem] border transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group relative overflow-hidden ${task.isCompleted ? 'border-emerald-100 bg-emerald-50/30 opacity-60' : task.examDate ? 'border-rose-300 ring-4 ring-rose-50' : 'border-slate-100'} ${!task.isAnalyzed && !task.isCompleted ? 'border-indigo-100 bg-indigo-50/10' : ''}`}>
+                
+                <div className="flex items-start gap-5 flex-1">
+                  <div className="flex flex-col gap-2 mt-1">
+                    <button 
+                      onClick={() => handleToggleComplete(task)}
+                      className={`relative p-2 rounded-full transition-all border-2 ${task.isCompleted ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100 scale-110' : 'bg-white border-slate-200 text-slate-200 hover:border-emerald-500 hover:text-emerald-500'}`}
+                      title={task.isCompleted ? "Mark as Incomplete" : "Mark as Complete"}
+                    >
+                      <CheckCircle2 size={24} strokeWidth={3} />
+                    </button>
+                    <button 
+                      onClick={() => toggleSelection(task.id)}
+                      className={`p-1 rounded-md transition-colors text-center ${selectedTasks.has(task.id) ? 'text-indigo-600' : 'text-slate-200 hover:text-indigo-400'}`}
+                      title="Select Task"
+                    >
+                      {selectedTasks.has(task.id) ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h3 className={`font-black text-xl tracking-tight transition-all ${task.isCompleted ? 'text-slate-400 line-through decoration-emerald-500 decoration-2' : 'text-slate-800'}`}>{task.title}</h3>
+                      {scheduledTaskIds.has(task.id) && (
+                        <span className="p-1 bg-emerald-50 text-emerald-600 rounded-md" title="Scheduled in Calendar">
+                          <Calendar size={12} />
+                        </span>
+                      )}
+                      {task.isAnalyzed ? (
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border tracking-tighter ${QUADRANT_COLORS[currentQuadrant]}`}>
+                          {currentQuadrant}
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-indigo-500 border border-indigo-200 tracking-tighter">
+                          AI Pending
+                        </span>
+                      )}
+                      <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 flex items-center gap-1 tracking-tighter border border-indigo-100"><Hourglass size={10} /> {task.estimatedHours}h Needed</span>
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium mb-3 break-words whitespace-pre-wrap">{task.description}</p>
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                        <Clock size={12} className="text-indigo-400" />
+                        Due: {task.deadline}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                        <AlertCircle size={12} className="text-indigo-400" />
+                        {task.difficulty}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => startAnalysis(task)}
+                    className={`group relative flex items-center gap-2 px-5 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest overflow-hidden ${task.isAnalyzed ? 'bg-slate-50 text-slate-500 hover:bg-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100'}`}
+                  >
+                    {!task.isAnalyzed && (
+                      <motion.div 
+                        initial={{ left: '-100%' }}
+                        animate={{ left: '100%' }}
+                        transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                        className="absolute top-0 bottom-0 w-1 bg-white/40 blur-sm z-10"
+                      />
+                    )}
+                    <Brain size={16} className={!task.isAnalyzed ? 'animate-pulse' : ''} />
+                    {task.isAnalyzed ? 'Update Logic' : 'Analyze'}
+                  </button>
+                  <button 
+                    onClick={() => startEdit(task)}
+                    className="p-3 text-slate-400 hover:text-indigo-600 transition-colors hover:bg-indigo-50 rounded-xl"
+                    title="Edit Task"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(task.id)}
+                    className="p-3 text-slate-200 hover:text-rose-600 transition-colors hover:bg-rose-50 rounded-xl"
+                    title="Remove Task"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
+            className="fixed bottom-10 right-10 z-[200] bg-slate-900 text-white px-8 py-5 rounded-[2rem] shadow-2xl border border-white/10 flex items-center gap-4"
+          >
+            <div className="p-2 bg-emerald-500 rounded-xl">
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <p className="font-black text-sm tracking-tight">{toast.message}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAddForm && (
+          <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] relative"
+            >
+              <div className="flex justify-between items-center mb-10">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">
+                    {editingTask ? 'Edit Task' : 'Create Task'}
+                  </h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Feeding the AI Matrix</p>
+                </div>
+                <button onClick={closeForm} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleAddTask} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Title</label>
+                  <input required value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none text-slate-700 font-bold" placeholder="E.g. Discrete Math HW" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Detail</label>
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none h-24 text-slate-700 font-bold" placeholder="Context for the AI..." />
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
+                      <Calendar size={14} color="#000000" strokeWidth={2.5} /> Deadline Date
+                    </label>
+                    <input type="date" required value={deadline} onChange={e => setDeadline(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 outline-none text-slate-700 font-bold cursor-pointer focus:border-indigo-500" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Task Category</label>
+                    <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl">
+                      <button 
+                        type="button"
+                        onClick={() => setTaskType('normal')}
+                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${taskType === 'normal' ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        <ClipboardList size={14} />
+                        Normal Task
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setTaskType('exam')}
+                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${taskType === 'exam' ? 'bg-rose-500 text-white shadow-lg shadow-rose-100' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        <Zap size={14} />
+                        Exam / Midterm
+                      </button>
+                    </div>
+                    {taskType === 'exam' && (
+                      <p className="text-[9px] font-bold text-rose-500 ml-2 animate-pulse">✨ Exam reminders will be activated for this date!</p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-1">
+                      <Hourglass size={12} /> Time Needed (Hours)
+                    </label>
+                    <input 
+                      type="number" required min="1" max="100"
+                      value={estimatedHours || ''} 
+                      onChange={e => setEstimatedHours(e.target.value === '' ? 0 : parseInt(e.target.value))} 
+                      className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-indigo-100 focus:border-indigo-600 outline-none text-slate-800 font-black text-center text-xl" 
+                    />
+                    <p className="text-[9px] font-bold text-slate-400 text-center">How much time do you need to study? (hrs/week)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Level of Importance</label>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                      {[TaskImportance.LOW, TaskImportance.MEDIUM, TaskImportance.HIGH].map(imp => (
+                        <button 
+                          key={imp} type="button"
+                          onClick={() => setImportance(imp)}
+                          className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase transition-all ${importance === imp ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                          {imp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <button type="submit" className="w-full nexus-bg-gradient text-white py-5 rounded-2xl font-black shadow-xl hover:opacity-95 transition-all uppercase tracking-[0.25em] text-xs">
+                  {editingTask ? 'Update Task' : 'Synchronize to Tasks'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {isBulkAnalyzing && (
+        <div className="fixed inset-0 z-[200] bg-slate-900/50 backdrop-blur-md flex items-center justify-center">
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="bg-white p-12 rounded-[3rem] shadow-2xl flex flex-col items-center gap-6 border border-indigo-50 text-center relative overflow-hidden"
+          >
+            <motion.div 
+              animate={{ top: ['0%', '100%', '0%'] }}
+              transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+              className="absolute left-0 right-0 h-1 bg-indigo-500/30 blur-sm z-0"
+            />
+            <Sparkles className="text-indigo-600 animate-bounce relative z-10" size={56} />
+            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter relative z-10">AI Analyze</h3>
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest relative z-10">Applying Eisenhower Logic to all nodes...</p>
+          </motion.div>
+        </div>
+      )}
+
+      {analyzingTaskId && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden"
+          >
+            {isClassifying ? (
+              <div className="py-12 flex flex-col items-center">
+                <div className="relative">
+                  <div className="w-24 h-24 border-8 border-indigo-100 rounded-full" />
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                    className="absolute inset-0 w-24 h-24 border-8 border-indigo-600 border-t-transparent rounded-full"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Zap className="text-indigo-600 animate-pulse" size={32} />
+                  </div>
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mt-8">Matrix Logic Processing</h2>
+                <div className="mt-4 w-48 h-1 bg-slate-100 rounded-full overflow-hidden">
+                  <motion.div 
+                    animate={{ x: ['-100%', '100%'] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                    className="h-full w-1/2 bg-indigo-600 rounded-full"
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-10 text-left">
+                  <span className="inline-block px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase mb-8 tracking-widest">Logic Node {analysisStep} / 3</span>
+                  {analysisStep === 1 && (
+                    <div className="animate-in slide-in-from-right-4">
+                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Criticality?</h2>
+                      <div className="space-y-3">
+                        {["Immediate (< 48h)", "Weekly Goal", "Long-term"].map(opt => (
+                          <QuestionButton key={opt} active={answers.urgency === opt} onClick={() => { setAnswers({...answers, urgency: opt}); setAnalysisStep(2); }} label={opt} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {analysisStep === 2 && (
+                    <div className="animate-in slide-in-from-right-4">
+                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Academic Value?</h2>
+                      <div className="space-y-3">
+                        {["Critical Grade", "Important Study", "Routine Admin"].map(opt => (
+                          <QuestionButton key={opt} active={answers.importance === opt} onClick={() => { setAnswers({...answers, importance: opt}); setAnalysisStep(3); }} label={opt} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {analysisStep === 3 && (
+                    <div className="animate-in slide-in-from-right-4">
+                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Mental Bandwidth?</h2>
+                      <div className="space-y-3">
+                        {["Stressed", "Alert", "Stable"].map(opt => (
+                          <QuestionButton key={opt} active={answers.pressure === opt} onClick={() => setAnswers({...answers, pressure: opt})} label={opt} />
+                        ))}
+                      </div>
+                      <button onClick={handleAnalysisSubmit} className="mt-10 w-full nexus-bg-gradient text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-[0.2em] text-xs">Execute Matrix</button>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setAnalyzingTaskId(null)} className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">Exit</button>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const QuestionButton = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void, key?: any }) => (
+  <button onClick={onClick} className={`w-full p-6 rounded-2xl border-2 text-left transition-all font-black uppercase text-xs tracking-widest ${active ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 hover:border-slate-200 text-slate-400 bg-white'}`}>
+    {label}
+  </button>
+);
