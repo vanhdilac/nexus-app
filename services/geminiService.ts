@@ -6,6 +6,7 @@ import { taskService } from "./taskService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+console.log("ENV KEY:", import.meta.env.VITE_GEMINI_API_KEY);
 // const ai = new GoogleGenAI(AIzaSyB6OGpMPyIh1B7_2Aa9dwOu5aX6DKvYo10);
 
 export const geminiService = {
