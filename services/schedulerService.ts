@@ -18,14 +18,20 @@ export const schedulerService = {
     const weekDays = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
-      return d.toISOString().split('T')[0];
+      // return d.toISOString().split('T')[0];
+      return d.toLocaleDateString('en-CA');
     });
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    // const todayStr = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toLocaleDateString('en-CA'); 
     const now = new Date();
     const currentHour = now.getHours();
     const currentMin = now.getMinutes();
-    const currentSlot = (currentHour - 7) * 2 + (currentMin >= 30 ? 1 : 0);
+    // const currentSlot = (currentHour - 7) * 2 + (currentMin >= 30 ? 1 : 0);
+    let currentSlot = (currentHour - 7) * 2 + (currentMin >= 30 ? 1 : 0);
+    if (currentSlot < 0) currentSlot = -1;
 
     weekDays.forEach(date => {
       occupiedSlots[date] = new Set<number>();
@@ -38,15 +44,21 @@ export const schedulerService = {
       const [sh, sm] = start.split(':').map(Number);
       const [eh, em] = end.split(':').map(Number);
       
-      const startSlot = (sh - 7) * 2 + (sm === 30 ? 1 : 0);
-      const endSlot = (eh - 7) * 2 + (em === 30 ? 1 : 0);
+      const startTotalMins = (sh - 7) * 60 + sm;
+      const endTotalMins = (eh - 7) * 60 + em;
       
-      for (let s = startSlot; s < endSlot; s++) {
-        occupiedSlots[date].add(s);
+      const startSlot = Math.floor(startTotalMins / 30);
+      const endSlot = Math.floor((endTotalMins - 1) / 30);
+      
+      for (let s = startSlot; s <= endSlot; s++) {
+        if (s >= 0 && s < 30) {
+          occupiedSlots[date].add(s);
+        }
       }
       // Add a 30-minute gap (1 slot) after each event to satisfy the "at least 10 min break" rule
-      if (endSlot < 30) {
-        occupiedSlots[date].add(endSlot);
+      const gapSlot = endSlot + 1;
+      if (gapSlot >= 0 && gapSlot < 30) {
+        occupiedSlots[date].add(gapSlot);
       }
     };
 
@@ -81,17 +93,49 @@ export const schedulerService = {
       const safeDeadline = new Date(deadlineDate.getTime() - 3 * 60 * 60 * 1000); // 3h safety buffer
       const windowStart = new Date(deadlineDate.getTime() - 72 * 60 * 60 * 1000); // 72h proximity window
 
-      // Sort days to be closer to deadline if proximity pass, or earlier if fallback
-      const daysToTry = isProximityPass ? [...targetDays].reverse() : targetDays;
+      // Sort days: If proximity pass, try days closer to deadline first (within window).
+      // If fallback, try all days before deadline.
+      const daysToTry = [...targetDays]
+        // .filter(d => {
+        //   const dayDate = new Date(d);
+        //   if (dayDate >= deadlineDate) return false;
+        //   if (isProximityPass) {
+        //     // In proximity pass, only consider days that overlap with the 72h window
+        //     // A day overlaps if its end (23:59) is after windowStart and its start (00:00) is before deadline
+        //     const dayEnd = new Date(dayDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+        //     return dayEnd >= windowStart;
+        //   }
+        //   return true;
+        // })
+        .filter(d => {
+          const dayDate = new Date(d);
+          const deadlineDay = new Date(deadlineDate);
+
+            dayDate.setHours(0, 0, 0, 0);
+            deadlineDay.setHours(0, 0, 0, 0);
+
+          if (dayDate >= deadlineDay) return false;
+
+          if (isProximityPass) {
+          const dayEnd = new Date(dayDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+          return dayEnd >= windowStart;
+          }
+
+          return true;
+          })
+        .sort((a, b) => {
+          // Both passes prioritize days closer to deadline
+          const distA = Math.abs(new Date(a).getTime() - deadlineDate.getTime());
+          const distB = Math.abs(new Date(b).getTime() - deadlineDate.getTime());
+          return distA - distB;
+        });
 
       for (const dateStr of daysToTry) {
         if (dateStr < todayStr) continue;
-        if (tasksPerDay[dateStr] >= 4) continue; // Increased limit slightly since blocks are smaller
+        if (tasksPerDay[dateStr] >= 5) continue;
 
-        // Slots from 07:00 to 22:00 (0 to 29)
-        const slots = Array.from({ length: 30 - slotsNeeded + 1 }, (_, i) => i);
-        // If proximity, try later slots first
-        if (isProximityPass) slots.reverse();
+        // Try later slots first to be closer to deadline
+        const slots = Array.from({ length: 30 - slotsNeeded + 1 }, (_, i) => i).reverse();
 
         for (const startSlot of slots) {
           if (dateStr === todayStr && startSlot <= currentSlot) continue;
@@ -118,8 +162,10 @@ export const schedulerService = {
           // Check Proximity Window if in proximity pass
           if (isProximityPass && startDateTime < windowStart) continue;
 
+          // const canFit = Array.from({ length: slotsNeeded + 1 }, (_, i) => startSlot + i)
+          //   .every(s => s >= 30 || !occupiedSlots[dateStr].has(s));
           const canFit = Array.from({ length: slotsNeeded + 1 }, (_, i) => startSlot + i)
-            .every(s => s >= 30 || !occupiedSlots[dateStr].has(s));
+            .every(s => s < 30 && !occupiedSlots[dateStr].has(s));
 
           if (canFit) {
             const newEvent: CalendarEvent = {

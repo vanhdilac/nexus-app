@@ -34,7 +34,16 @@ export const authService = {
       level: 1,
       streak: 0,
       hasSeenOnboarding: false,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      pet: {
+        name: 'Buddy',
+        level: 0,
+        food: 0,
+        colorTheme: 1 as 1 | 2 | 3,
+        isSleeping: false,
+        lastSleepTime: 0,
+        isHidden: false
+      }
     };
 
     data.users.push(newUser);
@@ -96,5 +105,48 @@ export const authService = {
     }
 
     return updatedUser;
+  },
+
+  checkAndUpdateStreak: (user: User): User | null => {
+    const today = new Date().toISOString().split('T')[0];
+    const lastActive = user.lastActiveDate;
+
+    // Ensure pet exists if it doesn't (for existing users)
+    const petUpdate: Partial<User> = !user.pet ? {
+      pet: {
+        name: 'Buddy',
+        level: 0,
+        food: Math.floor((user.exp || 0) / 10), // Convert existing EXP to food
+        colorTheme: 1 as 1 | 2 | 3,
+        isSleeping: false,
+        lastSleepTime: 0,
+        lastPettedTime: Date.now(),
+        isHidden: false
+      }
+    } : {};
+
+    if (lastActive === today) {
+      if (!user.pet) {
+        return authService.updateUser(user.id, petUpdate);
+      }
+      return user;
+    }
+
+    let newStreak = user.streak;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (lastActive === yesterdayStr) {
+      newStreak += 1;
+    } else {
+      newStreak = 1; // Reset to 1 since they are logging in today
+    }
+
+    return authService.updateUser(user.id, { 
+      streak: newStreak, 
+      lastActiveDate: today,
+      ...petUpdate
+    });
   }
 };

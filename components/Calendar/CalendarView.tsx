@@ -7,6 +7,7 @@ import { Sparkles, Save, RefreshCw, Plus, X, Trash2, Calendar as CalendarIcon, M
 
 import { schedulerService } from '../../services/schedulerService';
 import { motion, AnimatePresence } from 'framer-motion';
+import NewCommitmentModal from './NewCommitmentModal';
 
 import { gamificationService } from '../../services/gamificationService';
 import confetti from 'canvas-confetti';
@@ -43,15 +44,6 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
   const [previewEvents, setPreviewEvents] = useState<CalendarEvent[] | null>(null);
   const [showCommitmentForm, setShowCommitmentForm] = useState(false);
   const [movingEvent, setMovingEvent] = useState<CalendarEvent | null>(null);
-
-  // Form states
-  const [comTitle, setComTitle] = useState('');
-  const [comDate, setComDate] = useState(new Date().toISOString().split('T')[0]);
-  const [comStart, setComStart] = useState('09:00');
-  const [comEnd, setComEnd] = useState('10:00');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringDays, setRecurringDays] = useState<number[]>([]); // 0-6 (Sun-Sat)
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   
   const [moveDate, setMoveDate] = useState('');
   const [moveTime, setMoveTime] = useState('');
@@ -103,7 +95,8 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
         onUserUpdated(result.user);
         
         if (isNowCompleted) {
-          setToast(`+ ${exp} EXP! Bạn đỉnh vãi ${result.user.username} ơi! 🚀`);
+          const foodGain = Math.floor(exp / 10);
+          setToast(`+ ${foodGain} Pet food! You're amazing, ${result.user.username}! 🚀`);
           confetti({
             particleCount: 100,
             spread: 70,
@@ -111,7 +104,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
             colors: ['#f27024', '#3b82f6', '#10b981']
           });
         } else {
-          setToast(`- ${exp} EXP! Đừng bỏ cuộc nhé! 💪`);
+          setToast(`- ${exp} EXP! Don't give up! 💪`);
         }
         setTimeout(() => setToast(null), 3000);
       }
@@ -154,27 +147,26 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
       const existingCommitments = calendar.filter(e => e.isCommitment);
       
       // Try current week first
-      let result = schedulerService.autoSchedule(tasks, existingCommitments, weekStart, userId);
+      let currentWeekResults = schedulerService.autoSchedule(tasks, existingCommitments, weekStart, userId);
       
-      if (result.length === 0) {
-        // Try next week if current week is full
-        const nextWeekStart = new Date(weekStart);
-        nextWeekStart.setDate(weekStart.getDate() + 7);
-        result = schedulerService.autoSchedule(tasks, existingCommitments, nextWeekStart, userId);
-        
-        if (result.length > 0) {
-          setWeekStart(nextWeekStart);
-          setToast("Tuần này kín rồi, t đã xếp sang tuần sau cho m nhé! 🚀");
-        } else {
-          setToast("Không còn chỗ trống nào trong 2 tuần tới rồi! 😅");
-        }
+      // Try next week for remaining tasks or if current week is full
+      const nextWeekStart = new Date(weekStart);
+      nextWeekStart.setDate(weekStart.getDate() + 7);
+      
+      // We need to combine the results. To do this properly, we should pass the newly scheduled events from week 1
+      // as "existing events" for week 2.
+      let nextWeekResults = schedulerService.autoSchedule(tasks, [...existingCommitments, ...currentWeekResults], nextWeekStart, userId);
+      
+      const totalResults = [...currentWeekResults, ...nextWeekResults];
+
+      if (totalResults.length === 0) {
+        setToast("No free slots available in the next 2 weeks! 😅");
       } else {
-        setToast(`AI đã tối ưu lịch trình tuần này cho m rồi đó! ✨`);
+        setToast(`AI has optimized ${totalResults.length} study sessions for you in the next 2 weeks! ✨`);
+        // Only keep commitments from the original calendar and add the new AI results
+        setPreviewEvents([...existingCommitments, ...totalResults]);
       }
       
-      if (result.length > 0) {
-        setPreviewEvents([...calendar, ...result]);
-      }
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
       setToast("AI scheduling failed.");
@@ -183,39 +175,10 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
     setIsGenerating(false);
   };
 
-  const handleAddCommitment = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const newEvent: CalendarEvent = {
-      id: crypto.randomUUID(),
-      userId,
-      title: comTitle,
-      date: comDate,
-      day: new Date(comDate).toLocaleDateString('en-US', { weekday: 'long' }),
-      startTime: comStart,
-      endTime: comEnd,
-      isCommitment: true,
-      isRecurring: isRecurring,
-      recurrence: isRecurring ? {
-        frequency: 'weekly',
-        daysOfWeek: recurringDays,
-        endDate: recurrenceEndDate
-      } : undefined
-    };
-
+  const handleAddCommitment = (newEvent: CalendarEvent) => {
     storageService.saveCalendarEvents([...calendar, newEvent], userId);
     onCalendarUpdated();
     setShowCommitmentForm(false);
-    resetCommitmentForm();
-  };
-
-  const resetCommitmentForm = () => {
-    setComTitle('');
-    setComDate(new Date().toISOString().split('T')[0]);
-    setComStart('09:00');
-    setComEnd('10:00');
-    setIsRecurring(false);
-    setRecurringDays([]);
   };
 
   const handleReschedule = (e: React.FormEvent) => {
@@ -288,7 +251,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-sm">
             <CalendarIcon size={24} strokeWidth={2.5} />
           </div>
           <div>
@@ -323,7 +286,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
-        <div className="w-full lg:w-72 bg-white rounded-[2rem] border border-slate-200 p-6 flex-shrink-0 shadow-sm h-fit sticky top-6">
+        <div className="w-full lg:w-72 bg-white rounded-[2rem] border border-slate-200 p-6 flex-shrink-0 shadow-sm h-fit">
           <div className="flex items-center gap-2 mb-6 border-b border-slate-50 pb-4">
             <ListTodo size={18} className="text-indigo-600" />
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Task Inbox</h3>
@@ -347,7 +310,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
         {/* Weekly Time Grid */}
         <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="overflow-x-auto custom-scrollbar">
-            <div className="min-w-[800px]">
+            <div className="w-full min-w-[800px] lg:min-w-0">
               {/* Day Header Row */}
               <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50/50">
                 <div className="border-r border-slate-100 flex items-center justify-center">
@@ -439,7 +402,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                             {!evt.isCommitment && (
                               <div className="absolute inset-0 bg-slate-900/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-2 text-center z-20">
                                 <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
-                                  {tasks.find(t => t.id === evt.taskId)?.isCompleted ? 'Bấm để hoàn tác' : 'Bấm để hoàn thành và nhận EXP!'}
+                                  {tasks.find(t => t.id === evt.taskId)?.isCompleted ? 'Click to undo' : 'Click to complete and earn EXP!'}
                                 </p>
                               </div>
                             )}
@@ -502,106 +465,12 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
       )}
 
       {/* Add Commitment Modal */}
-      {showCommitmentForm && (
-        <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white w-full max-w-xl rounded-[3rem] p-10 shadow-2xl border border-slate-200 overflow-y-auto max-h-[90vh]"
-          >
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
-                  <CalendarIcon size={20} />
-                </div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">New Commitment</h2>
-              </div>
-              <button onClick={() => setShowCommitmentForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={24} /></button>
-            </div>
-            <form onSubmit={handleAddCommitment} className="space-y-6">
-              <div className="space-y-2">
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Title</label>
-                <input required value={comTitle} onChange={e => setComTitle(e.target.value)} className="w-full bg-slate-50 px-6 py-4 rounded-2xl border-2 border-transparent focus:border-indigo-600 outline-none font-bold transition-all" placeholder="E.g. Yoga, Part-time Work, University Class" />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
-                    <CalendarIcon size={12} /> Start Date
-                  </label>
-                  <input type="date" required value={comDate} onChange={e => setComDate(e.target.value)} className="w-full bg-slate-50 px-6 py-4 rounded-2xl border-2 border-transparent focus:border-indigo-600 outline-none font-bold" />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
-                    <Clock size={12} /> Time Range
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input type="time" required value={comStart} onChange={e => setComStart(e.target.value)} className="flex-1 bg-slate-50 px-4 py-4 rounded-2xl border-2 border-transparent focus:border-indigo-600 outline-none font-bold text-center" />
-                    <span className="text-slate-300">→</span>
-                    <input type="time" required value={comEnd} onChange={e => setComEnd(e.target.value)} className="flex-1 bg-slate-50 px-4 py-4 rounded-2xl border-2 border-transparent focus:border-indigo-600 outline-none font-bold text-center" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <RefreshCw size={16} className="text-indigo-600" />
-                    <span className="text-sm font-bold text-slate-700">Recurring Event</span>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => setIsRecurring(!isRecurring)}
-                    className={`w-12 h-6 rounded-full transition-all relative ${isRecurring ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isRecurring ? 'left-7' : 'left-1'}`} />
-                  </button>
-                </div>
-
-                {isRecurring && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    className="space-y-6 pt-4 border-t border-slate-200"
-                  >
-                    <div className="space-y-3">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Repeat on</label>
-                      <div className="flex justify-between">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              if (recurringDays.includes(idx)) {
-                                setRecurringDays(recurringDays.filter(d => d !== idx));
-                              } else {
-                                setRecurringDays([...recurringDays, idx]);
-                              }
-                            }}
-                            className={`w-10 h-10 rounded-xl font-bold text-xs transition-all ${recurringDays.includes(idx) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-400 border border-slate-200 hover:border-indigo-200'}`}
-                          >
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                        <CalendarIcon size={12} /> End Recurrence On
-                      </label>
-                      <input type="date" value={recurrenceEndDate} onChange={e => setRecurrenceEndDate(e.target.value)} className="w-full bg-white px-6 py-4 rounded-2xl border-2 border-slate-100 outline-none font-bold focus:border-indigo-600" />
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-
-              <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-100 mt-4 hover:bg-black transition-all">
-                Save To Planner
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      )}
+      <NewCommitmentModal 
+        isOpen={showCommitmentForm}
+        onClose={() => setShowCommitmentForm(false)}
+        onAdd={handleAddCommitment}
+        userId={userId}
+      />
     </div>
   );
 }

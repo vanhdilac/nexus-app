@@ -1,6 +1,7 @@
 
 :root {
   --accent: #f27024;
+  --accent-rgb: 242, 112, 36;
   --bg-main: #f8fafc;
   --text-main: #0f172a;
   --card-bg: #ffffff;
@@ -36,19 +37,44 @@ body {
   opacity: 0.8;
 }
 
-/* Dynamic Accent Color */
+/* Dynamic Accent Color Utilities */
 .nexus-bg-gradient {
   background: linear-gradient(135deg, var(--accent) 0%, #22c55e 100%) !important;
 }
 
-.text-indigo-600, .text-indigo-500 {
+.text-accent {
   color: var(--accent) !important;
 }
 
-.bg-indigo-600, .bg-indigo-500 {
+.bg-accent {
   background-color: var(--accent) !important;
 }
 
-.shadow-indigo-100 {
+.border-accent {
+  border-color: var(--accent) !important;
+}
+
+.ring-accent {
+  --tw-ring-color: var(--accent) !important;
+}
+
+/* Override common indigo classes to use accent color */
+.text-indigo-600, .text-indigo-500, .text-indigo-400 {
+  color: var(--accent) !important;
+}
+
+.bg-indigo-600, .bg-indigo-500, .bg-indigo-400 {
+  background-color: var(--accent) !important;
+}
+
+.border-indigo-600, .border-indigo-500, .border-indigo-100, .border-indigo-200 {
+  border-color: var(--accent) !important;
+}
+
+.bg-indigo-50 {
+  background-color: rgba(var(--accent-rgb), 0.1) !important;
+}
+
+.shadow-indigo-100, .shadow-orange-100 {
   box-shadow: 0 10px 15px -3px rgba(var(--accent-rgb), 0.1), 0 4px 6px -2px rgba(var(--accent-rgb), 0.05) !important;
 }

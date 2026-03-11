@@ -44,13 +44,13 @@ export default function FeedbackView({ user }: FeedbackViewProps) {
         <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <CheckCircle2 className="text-emerald-500" size={40} />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Thank You!</h2>
-        <p className="text-slate-500 mb-8">Your feedback helps us make Nexus better for all FPT students.</p>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Thank you!</h2>
+        <p className="text-slate-500 mb-8">Your feedback helps me improve Nexus for all FPT students.</p>
         <button 
           onClick={() => setIsSubmitted(false)}
-          className="px-8 py-3 bg-[#f27024] text-white font-bold rounded-xl shadow-lg hover:bg-[#d9621e] transition-all"
+          className="px-8 py-3 bg-accent text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-all"
         >
-          Send More Feedback
+          Send more feedback
         </button>
       </motion.div>
     );
@@ -65,11 +65,11 @@ export default function FeedbackView({ user }: FeedbackViewProps) {
       <header className="mb-10">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-3 bg-orange-100 rounded-2xl">
-            <MessageSquare className="text-[#f27024]" size={24} />
+            <MessageSquare className="text-accent" size={24} />
           </div>
           <h1 className="text-3xl font-bold text-slate-900">Feedback</h1>
         </div>
-        <p className="text-slate-500">We value your thoughts. Let us know how we can improve your experience.</p>
+        <p className="text-slate-500">Nexus values your opinion. Let us know how we can improve your experience.</p>
       </header>
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-8">
@@ -83,7 +83,7 @@ export default function FeedbackView({ user }: FeedbackViewProps) {
                 onClick={() => setType(t)}
                 className={`py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-tight transition-all border ${
                   type === t 
-                    ? 'bg-[#f27024] text-white border-transparent shadow-md' 
+                    ? 'bg-accent text-white border-transparent shadow-md' 
                     : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'
                 }`}
               >
@@ -118,17 +118,17 @@ export default function FeedbackView({ user }: FeedbackViewProps) {
             required
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Tell us what's on your mind..."
-            className="w-full h-40 p-5 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#f27024] focus:bg-white transition-all text-slate-700 font-medium"
+            placeholder="Share your thoughts with us..."
+            className="w-full h-40 p-5 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white transition-all text-slate-700 font-medium"
           />
         </div>
 
         <button
           type="submit"
-          className="w-full py-4 bg-[#f27024] text-white font-bold rounded-2xl shadow-xl shadow-orange-100 hover:bg-[#d9621e] transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+          className="w-full py-4 bg-accent text-white font-bold rounded-2xl shadow-xl shadow-orange-100 hover:opacity-90 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
         >
           <Send size={16} />
-          Submit Feedback
+          Send Feedback
         </button>
       </form>
     </motion.div>

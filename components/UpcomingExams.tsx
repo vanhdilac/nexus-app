@@ -29,7 +29,7 @@ export default function UpcomingExams({ tasks }: UpcomingExamsProps) {
     <div className="mt-8 px-2">
       <div className="flex items-center gap-2 mb-4 px-2">
         <GraduationCap size={16} className="text-rose-500" />
-        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upcoming Exams</h3>
+        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upcoming Tests/Exams</h3>
       </div>
       <div className="space-y-3">
         {examTasks.map(task => {
@@ -45,7 +45,7 @@ export default function UpcomingExams({ tasks }: UpcomingExamsProps) {
                 <span className="text-[9px] font-medium text-slate-400">{task.examDate}</span>
                 <span className={`text-[9px] font-extrabold flex items-center gap-1 ${isUrgent ? 'text-rose-600 animate-pulse' : 'text-slate-500'}`}>
                   <Clock size={10} />
-                  {daysLeft < 0 ? 'Passed' : daysLeft === 0 ? 'Today' : `In ${daysLeft} days`}
+                  {daysLeft < 0 ? 'Already passed' : daysLeft === 0 ? "It's today!" : `${daysLeft} days left`}
                 </span>
               </div>
             </div>

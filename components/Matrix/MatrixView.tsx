@@ -70,17 +70,17 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
+      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">The Eisenhower Matrix</h1>
-            <p className="text-slate-500 font-medium">Kéo thả các task để thay đổi chiến thuật xử lý của bạn.</p>
+            <p className="text-slate-500 font-medium">Drag and drop tasks to change your processing strategy.</p>
           </div>
         </div>
 
         {/* GLOBAL INBOX */}
         {unanalyzedTasks.length > 0 && (
-          <div className="bg-indigo-600 rounded-[3rem] p-10 shadow-2xl shadow-indigo-200 animate-in zoom-in-95 relative overflow-hidden">
+          <div className="bg-accent rounded-[3rem] p-10 shadow-2xl shadow-orange-100 animate-in zoom-in-95 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-10 opacity-10">
               <Sparkles size={120} />
             </div>
@@ -100,8 +100,8 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
                   <h4 className="font-bold text-slate-800 line-clamp-1 mb-2">{task.title}</h4>
                   <p className="text-xs text-slate-400 mb-4 leading-relaxed break-words whitespace-pre-wrap">{task.description || 'No description'}</p>
                   <div className="flex items-center justify-between border-t border-slate-50 pt-4">
-                     <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full uppercase">Waiting</span>
-                     <Brain size={16} className="text-slate-200 group-hover:text-indigo-600 transition-colors" />
+                     <span className="text-[9px] font-black text-accent bg-orange-50 px-2 py-1 rounded-full uppercase">Waiting</span>
+                     <Brain size={16} className="text-slate-200 group-hover:text-accent transition-colors" />
                   </div>
                 </div>
               ))}
@@ -151,10 +151,10 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
           }),
         }}>
           {activeTask ? (
-            <div className="bg-white rounded-2xl p-5 shadow-2xl border-2 border-indigo-500 w-72 rotate-3">
+            <div className="bg-white rounded-2xl p-5 shadow-2xl border-2 border-accent w-72 rotate-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 text-sm truncate">{activeTask.title}</span>
-                <GripVertical size={16} className="text-indigo-500" />
+                <GripVertical size={16} className="text-accent" />
               </div>
             </div>
           ) : null}
@@ -227,12 +227,12 @@ const DraggableTask = ({ task }: { task: Task, key?: string }) => {
           <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0" />
           <span className="font-bold text-slate-800 text-sm truncate">{task.title}</span>
         </div>
-        <Info size={16} className="text-slate-300 group-hover:text-indigo-600 transition-colors shrink-0" />
+        <Info size={16} className="text-slate-300 group-hover:text-accent transition-colors shrink-0" />
       </div>
 
       {hovered && !isDragging && (
         <div className="mt-3 bg-slate-900 text-white p-6 rounded-[2rem] text-sm shadow-2xl animate-in fade-in slide-in-from-top-4">
-          <p className="font-black text-indigo-400 uppercase tracking-widest text-[10px] mb-2">AI Reasoning</p>
+          <p className="font-black text-accent uppercase tracking-widest text-[10px] mb-2">AI Reasoning</p>
           <p className="leading-relaxed font-medium text-slate-200 italic">"{task.reasoning}"</p>
         </div>
       )}

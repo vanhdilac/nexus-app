@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export default function NexusLogo({ size = 48, className = "" }: { size?: number, className?: string }) {

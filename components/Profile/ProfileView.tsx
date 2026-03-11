@@ -26,6 +26,16 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
   const [avatarColor, setAvatarColor] = useState(user.avatarColor || '#f27024');
   const [themeColor, setThemeColor] = useState(user.themeColor || '#f27024');
   const [isDarkMode, setIsDarkMode] = useState(user.isDarkMode || false);
+
+  const applyThemeColor = (color: string) => {
+    setThemeColor(color);
+    document.documentElement.style.setProperty('--accent', color);
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    document.documentElement.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+  };
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -174,7 +184,7 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
                       <button
                         key={color}
                         type="button"
-                        onClick={() => setThemeColor(color)}
+                        onClick={() => applyThemeColor(color)}
                         className={`w-10 h-10 rounded-full border-4 transition-all ${
                           themeColor === color ? 'border-white ring-2 ring-slate-800 scale-110' : 'border-transparent hover:scale-105'
                         }`}
@@ -206,7 +216,7 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
               <button 
                 type="submit"
                 disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 px-8 py-4 bg-[#f27024] text-white rounded-2xl font-bold shadow-lg shadow-orange-100 hover:bg-[#d95f1d] transition-all disabled:opacity-50"
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-accent text-white rounded-2xl font-bold shadow-lg shadow-orange-100 hover:opacity-90 transition-all disabled:opacity-50"
               >
                 <Save size={18} />
                 <span>Save Changes</span>

@@ -50,24 +50,23 @@ export const gamificationService = {
     const newExp = Math.max(0, currentExp + expGain);
     const newLevel = Math.floor(newExp / 500) + 1;
     
+    // Convert expGain to food (10 EXP = 1 food)
+    // Only positive gains convert to food
+    let foodGain = 0;
+    if (expGain > 0) {
+      foodGain = Math.floor(expGain / 10);
+    }
+
     const updates: Partial<User> = {
       exp: newExp,
       level: newLevel
     };
 
-    // Update streak logic
-    const today = new Date().toISOString().split('T')[0];
-    if (user.lastActiveDate !== today) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-      if (user.lastActiveDate === yesterdayStr) {
-        updates.streak = (user.streak || 0) + 1;
-      } else {
-        updates.streak = 1; // Reset if missed a day or first time
-      }
-      updates.lastActiveDate = today;
+    if (user.pet) {
+      updates.pet = {
+        ...user.pet,
+        food: (user.pet.food || 0) + foodGain
+      };
     }
 
     const updatedUser = authService.updateUser(userId, updates);

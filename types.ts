@@ -54,6 +54,17 @@ export interface CalendarEvent {
   };
 }
 
+export interface Pet {
+  name: string;
+  level: number;
+  food: number;
+  colorTheme: 1 | 2 | 3; // 1: Pink, 2: Purple, 3: Orange-Red
+  isSleeping: boolean;
+  lastSleepTime: number;
+  lastPettedTime?: number;
+  isHidden: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -64,12 +75,13 @@ export interface User {
   avatarColor?: string;
   themeColor?: string;
   isDarkMode?: boolean;
-  exp: number;
-  level: number;
+  exp: number; // Still used to track total, but will be converted to food
+  level: number; // User level (separate from pet level)
   streak: number;
   lastActiveDate?: string; // YYYY-MM-DD
   hasSeenOnboarding: boolean;
   createdAt: number;
+  pet?: Pet;
 }
 
 export interface Feedback {

@@ -16,127 +16,127 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
 
   const steps = [
     {
-      title: "Chào mừng đến với Nexus! 🚀",
-      icon: <Target className="text-[#f27024]" size={32} />,
+      title: "Welcome to Nexus! 🚀",
+      icon: <Target className="text-accent" size={32} />,
       content: (
         <div className="space-y-6">
           <p className="text-slate-600 text-lg leading-relaxed">
-            Hế lô bạn trẻ! Nexus là "trợ lý học tập" xịn xò giúp bạn dẹp tan nỗi lo deadline tại FPTU bằng phương pháp **Eisenhower Matrix** kết hợp với AI.
+            Hello there! I'm Nexus - your smart "study assistant" here to help you conquer deadlines at FPTU using the **Eisenhower Matrix** combined with AI.
           </p>
           <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
             <h4 className="font-bold text-slate-800 text-lg mb-2 flex items-center gap-2">
-              <BarChart3 size={20} className="text-[#f27024]" />
-              Dashboard - "Tổng hành dinh"
+              <BarChart3 size={20} className="text-accent" />
+              Dashboard - "Command Center"
             </h4>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Nơi check nhanh "sức khỏe" học tập: Tổng task đang có, bao nhiêu cái đã được AI "soi", và đặc biệt là những task khẩn cấp cần xử ngay.
+              This is where you can quickly check your academic "health": total tasks, how many I've analyzed, and especially urgent tasks that need immediate attention.
             </p>
           </div>
           <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
             <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2">Pro-tip</p>
-            <p className="text-sm text-slate-700 italic font-medium">"Ghé Dashboard mỗi sáng để biết hôm nay mình cần 'chiến' những gì nhé!"</p>
+            <p className="text-sm text-slate-700 italic font-medium">"Visit the Dashboard every morning so I can remind you what needs to be 'conquered' today!"</p>
           </div>
         </div>
       )
     },
     {
-      title: "Academic Tasks - Nạp Deadline 📝",
-      icon: <Zap className="text-[#f27024]" size={32} />,
+      title: "Academic Tasks - Load Deadlines 📝",
+      icon: <Zap className="text-accent" size={32} />,
       content: (
         <div className="space-y-6">
           <div className="space-y-4">
             <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-orange-100 text-[#f27024] flex items-center justify-center text-sm font-bold shrink-0">1</div>
-              <p className="text-base text-slate-700 font-medium">Bấm <strong>Add Task</strong> để bắt đầu.</p>
+              <div className="w-8 h-8 rounded-full bg-orange-100 text-accent flex items-center justify-center text-sm font-bold shrink-0">1</div>
+              <p className="text-base text-slate-700 font-medium">Click <strong>Add Task</strong> to get started.</p>
             </div>
             <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-orange-100 text-[#f27024] flex items-center justify-center text-sm font-bold shrink-0">2</div>
-              <p className="text-base text-slate-700 font-medium">Sử dụng <strong>Icon Tick xanh</strong> mới để hoàn thành task. Task sẽ có hiệu ứng gạch ngang và mờ đi khi xong.</p>
+              <div className="w-8 h-8 rounded-full bg-orange-100 text-accent flex items-center justify-center text-sm font-bold shrink-0">2</div>
+              <p className="text-base text-slate-700 font-medium">Use the <strong>Green Checkmark</strong> to complete tasks. I'll strike through and fade them out for you.</p>
             </div>
             <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-orange-100 text-[#f27024] flex items-center justify-center text-sm font-bold shrink-0">3</div>
-              <p className="text-base text-slate-700 font-medium"><strong>EXP System</strong>: Nhận EXP khi hoàn thành. Nếu bạn bỏ tick, số EXP đó sẽ bị trừ đi chính xác để đảm bảo công bằng.</p>
+              <div className="w-8 h-8 rounded-full bg-orange-100 text-accent flex items-center justify-center text-sm font-bold shrink-0">3</div>
+              <p className="text-base text-slate-700 font-medium"><strong>EXP System</strong>: I'll grant EXP when you complete tasks. If you uncheck them, I'll deduct the EXP to keep things fair!</p>
             </div>
           </div>
           <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
             <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Nexus Mail 📧</p>
-            <p className="text-sm text-slate-700 italic font-medium">"Hệ thống sẽ tự động nhắc bạn ôn thi trước 2 ngày và chuẩn bị đồ dùng trước 1 ngày qua thông báo email mô phỏng!"</p>
+            <p className="text-sm text-slate-700 italic font-medium">"I'll automatically remind you to study 2 days before an exam and prepare your gear 1 day before via simulated email notifications!"</p>
           </div>
         </div>
       )
     },
     {
-      title: "The Matrix - Ma Trận AI 🧠",
-      icon: <LayoutGrid className="text-[#f27024]" size={32} />,
+      title: "The Matrix - AI Intelligence 🧠",
+      icon: <LayoutGrid className="text-accent" size={32} />,
       content: (
         <div className="space-y-6">
-          <p className="text-base text-slate-600 font-medium">AI sẽ tự động "ném" task của bạn vào 4 ô chiến thuật:</p>
+          <p className="text-base text-slate-600 font-medium">I'll automatically "sort" your tasks into 4 strategic quadrants:</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
               <p className="font-bold text-rose-600 text-sm">Do First</p>
-              <p className="text-xs text-slate-500">Làm ngay, không bàn cãi!</p>
+              <p className="text-xs text-slate-500">Do it now, no excuses!</p>
             </div>
             <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
               <p className="font-bold text-blue-600 text-sm">Schedule</p>
-              <p className="text-xs text-slate-500">Lên lịch để làm sau.</p>
+              <p className="text-xs text-slate-500">Schedule it for later.</p>
             </div>
             <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
               <p className="font-bold text-amber-600 text-sm">Delegate</p>
-              <p className="text-xs text-slate-500">Nhờ vả hoặc tối ưu lại.</p>
+              <p className="text-xs text-slate-500">Ask for help or optimize.</p>
             </div>
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
               <p className="font-bold text-slate-600 text-sm">Eliminate</p>
-              <p className="text-xs text-slate-500">Xóa bỏ, đừng bận tâm.</p>
+              <p className="text-xs text-slate-500">Delete it, don't worry about it.</p>
             </div>
           </div>
           <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
             <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-2">Pro-tip</p>
-            <p className="text-sm text-slate-700 italic font-medium">"Tin tưởng AI, nhưng bạn vẫn có thể tự tay điều chỉnh nếu thấy chưa 'hợp gu' nhé."</p>
+            <p className="text-sm text-slate-700 italic font-medium">"Trust my analysis, but feel free to manually adjust things if they don't quite fit your style."</p>
           </div>
         </div>
       )
     },
     {
-      title: "Study Planner - Lịch Học AI 📅",
-      icon: <Calendar className="text-[#f27024]" size={32} />,
+      title: "Study Planner - AI Schedule 📅",
+      icon: <Calendar className="text-accent" size={32} />,
       content: (
         <div className="space-y-6">
-          <p className="text-base text-slate-600 font-medium">Tính năng "đỉnh" nhất: **AI Week Planner**.</p>
+          <p className="text-base text-slate-600 font-medium">The "coolest" feature: **AI Week Planner**.</p>
           <div className="space-y-4">
             <div className="flex items-start gap-4">
               <Sparkles size={20} className="text-orange-400 mt-1 shrink-0" />
-              <p className="text-sm text-slate-700 leading-relaxed">Tự động sắp xếp các task vào khung giờ trống trong tuần.</p>
+              <p className="text-sm text-slate-700 leading-relaxed">I automatically arrange tasks into your free slots throughout the week.</p>
             </div>
             <div className="flex items-start gap-4">
               <Clock size={20} className="text-orange-400 mt-1 shrink-0" />
-              <p className="text-sm text-slate-700 leading-relaxed">Hiển thị rõ ràng khoảng thời gian <strong>Start - End</strong> (ví dụ: 09:00 - 10:30) cho mỗi phiên học.</p>
+              <p className="text-sm text-slate-700 leading-relaxed">I clearly display <strong>Start - End</strong> times (e.g., 09:00 - 10:30) for each of your study sessions.</p>
             </div>
           </div>
           <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
             <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-2">Responsive</p>
-            <p className="text-sm text-slate-700 italic font-medium">"Trên điện thoại, bạn có thể vuốt ngang bảng lịch để xem đầy đủ 7 ngày trong tuần!"</p>
+            <p className="text-sm text-slate-700 italic font-medium">"On mobile, you can swipe horizontally across the calendar to see all 7 days of the week!"</p>
           </div>
         </div>
       )
     },
     {
-      title: "Profile - Khẳng định chất riêng 🎨",
-      icon: <User className="text-[#f27024]" size={32} />,
+      title: "Profile - Define Your Style 🎨",
+      icon: <User className="text-accent" size={32} />,
       content: (
         <div className="space-y-6">
-          <p className="text-base text-slate-600 font-medium">Đừng quên làm mới bản thân tại trang Profile:</p>
+          <p className="text-base text-slate-600 font-medium">Don't forget to refresh your identity on the Profile page:</p>
           <ul className="list-disc list-inside text-sm text-slate-600 space-y-2 ml-2 font-medium">
-            <li>Cập nhật <strong>Bio</strong>: Viết vài dòng châm ngôn học tập.</li>
-            <li>Đổi <strong>Theme Color</strong>: Chọn màu sắc đại diện cho cá tính của bạn.</li>
+            <li>Update <strong>Bio</strong>: Write a few lines of your study motto.</li>
+            <li>Change <strong>Theme Color</strong>: Pick a color that represents your personality.</li>
           </ul>
           <div className="bg-slate-900 text-white p-8 rounded-2xl relative overflow-hidden mt-6">
             <div className="relative z-10">
-              <h4 className="font-bold text-lg mb-2">Sẵn sàng chưa?</h4>
+              <h4 className="font-bold text-lg mb-2">Are you ready?</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Hành trình chinh phục GPA 10.0 bắt đầu từ đây. Chúc bạn có những trải nghiệm tuyệt vời cùng Nexus!
+                Your journey to a 4.0 GPA starts here. I wish you an amazing experience with Nexus!
               </p>
             </div>
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-[#f27024] rounded-full blur-3xl opacity-30"></div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-accent rounded-full blur-3xl opacity-30"></div>
           </div>
         </div>
       )
@@ -186,7 +186,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                     {steps[currentStep].title}
                   </h2>
                   <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">
-                    Bước {currentStep + 1} / {steps.length}
+                    Step {currentStep + 1} / {steps.length}
                   </p>
                 </div>
               </div>
@@ -218,7 +218,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                   <div 
                     key={idx} 
                     className={`h-1 rounded-full transition-all duration-300 ${
-                      idx === currentStep ? 'w-6 bg-[#f27024]' : 'w-2 bg-slate-200'
+                      idx === currentStep ? 'w-6 bg-accent' : 'w-2 bg-slate-200'
                     }`}
                   />
                 ))}
@@ -235,9 +235,9 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                 )}
                 <button
                   onClick={nextStep}
-                  className="px-8 py-4 bg-[#f27024] text-white font-bold rounded-2xl shadow-xl shadow-orange-100 hover:bg-[#d9621e] transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+                  className="px-8 py-4 bg-accent text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 hover:bg-orange-600 transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
                 >
-                  {currentStep === steps.length - 1 ? 'Bắt đầu ngay' : 'Tiếp theo'}
+                  {currentStep === steps.length - 1 ? 'Get Started' : 'Next'}
                   <ArrowRight size={16} />
                 </button>
               </div>

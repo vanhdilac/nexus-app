@@ -126,9 +126,10 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
         onUserUpdated(result.user);
         
         if (isNowCompleted) {
+          const foodGain = Math.floor(exp / 10);
           // Show Toast
           setToast({ 
-            message: `+ ${exp} EXP! Bạn đỉnh vãi ${result.user.username} ơi! 🚀`, 
+            message: `+ ${foodGain} Pet food! You're doing great, ${result.user.username}! 🚀`, 
             type: 'success' 
           });
           setTimeout(() => setToast(null), 3000);
@@ -153,7 +154,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
           }
         } else {
           setToast({ 
-            message: `- ${exp} EXP! Đừng bỏ cuộc nhé! 💪`, 
+            message: `- ${exp} EXP! I believe in you, don't give up! 💪`, 
             type: 'info' 
           });
           setTimeout(() => setToast(null), 3000);
@@ -173,7 +174,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     const tasksToAnalyze = tasks.filter(t => selectedTasks.size > 0 ? selectedTasks.has(t.id) : !t.isAnalyzed);
     
     if (tasksToAnalyze.length === 0) {
-      alert("No pending tasks to analyze.");
+      alert("I don't see any tasks waiting for analysis.");
       return;
     }
 
@@ -212,7 +213,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
       setSelectedTasks(new Set());
     } catch (err) {
       console.error(err);
-      alert("AI bulk analysis failed.");
+      alert("I encountered an error during bulk analysis, please try again.");
     }
     setIsBulkAnalyzing(false);
   };
@@ -249,7 +250,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
         setAnalysisStep(0);
         setAnswers({ urgency: '', importance: '', pressure: '' });
       } catch (err) {
-        alert("Classification failed.");
+        alert("I couldn't classify this task, please try again.");
       }
     }
     setIsClassifying(false);
@@ -263,7 +264,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm("Delete this academic record?")) {
+    if (window.confirm("Are you sure you want me to delete this study record?")) {
       storageService.deleteTask(id);
       onTasksUpdated(); 
     }
@@ -295,7 +296,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
           </button>
           <button 
             onClick={() => setShowAddForm(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2 font-black transition-all text-xs uppercase tracking-widest"
+            className="bg-accent hover:bg-orange-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-orange-100 flex items-center gap-2 font-black transition-all text-xs uppercase tracking-widest"
           >
             <Plus size={18} />
             <span>Add Task</span>
@@ -309,7 +310,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <ClipboardList className="text-slate-300" size={32} />
             </div>
-            <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[10px]">Tasks Empty</p>
+            <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[10px]">The list is empty</p>
           </div>
         ) : (
           tasks.sort((a,b) => b.createdAt - a.createdAt).map(task => {
@@ -328,7 +329,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                     </button>
                     <button 
                       onClick={() => toggleSelection(task.id)}
-                      className={`p-1 rounded-md transition-colors text-center ${selectedTasks.has(task.id) ? 'text-indigo-600' : 'text-slate-200 hover:text-indigo-400'}`}
+                      className={`p-1 rounded-md transition-colors text-center ${selectedTasks.has(task.id) ? 'text-accent' : 'text-slate-200 hover:text-orange-400'}`}
                       title="Select Task"
                     >
                       {selectedTasks.has(task.id) ? <CheckCircle2 size={16} /> : <Circle size={16} />}
@@ -347,11 +348,11 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                           {currentQuadrant}
                         </span>
                       ) : (
-                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-indigo-500 border border-indigo-200 tracking-tighter">
+                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-accent border border-orange-200 tracking-tighter">
                           AI Pending
                         </span>
                       )}
-                      <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 flex items-center gap-1 tracking-tighter border border-indigo-100"><Hourglass size={10} /> {task.estimatedHours}h Needed</span>
+                      <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-50 text-accent flex items-center gap-1 tracking-tighter border border-orange-100"><Hourglass size={10} /> {task.estimatedHours}h Needed</span>
                     </div>
                     <p className="text-slate-500 text-sm font-medium mb-3 break-words whitespace-pre-wrap">{task.description}</p>
                     <div className="flex items-center gap-4">
@@ -370,7 +371,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => startAnalysis(task)}
-                    className={`group relative flex items-center gap-2 px-5 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest overflow-hidden ${task.isAnalyzed ? 'bg-slate-50 text-slate-500 hover:bg-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100'}`}
+                    className={`group relative flex items-center gap-2 px-5 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest overflow-hidden ${task.isAnalyzed ? 'bg-slate-50 text-slate-500 hover:bg-slate-100' : 'bg-accent text-white hover:bg-orange-700 shadow-lg shadow-orange-100'}`}
                   >
                     {!task.isAnalyzed && (
                       <motion.div 
@@ -385,7 +386,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                   </button>
                   <button 
                     onClick={() => startEdit(task)}
-                    className="p-3 text-slate-400 hover:text-indigo-600 transition-colors hover:bg-indigo-50 rounded-xl"
+                    className="p-3 text-slate-400 hover:text-accent transition-colors hover:bg-orange-50 rounded-xl"
                     title="Edit Task"
                   >
                     <Edit3 size={18} />
@@ -422,12 +423,12 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
 
       <AnimatePresence>
         {showAddForm && (
-          <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl overflow-y-auto max-h-[90vh] relative"
+              className="bg-white w-full max-w-lg md:rounded-[2.5rem] p-6 md:p-10 shadow-2xl overflow-y-auto max-h-full md:max-h-[90vh] relative no-scrollbar modal-content"
             >
               <div className="flex justify-between items-center mb-10">
                 <div>
@@ -474,11 +475,11 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                         className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${taskType === 'exam' ? 'bg-rose-500 text-white shadow-lg shadow-rose-100' : 'text-slate-400 hover:text-slate-600'}`}
                       >
                         <Zap size={14} />
-                        Exam / Midterm
+                        Tests / Exams
                       </button>
                     </div>
                     {taskType === 'exam' && (
-                      <p className="text-[9px] font-bold text-rose-500 ml-2 animate-pulse">✨ Exam reminders will be activated for this date!</p>
+                      <p className="text-[9px] font-bold text-rose-500 ml-2 animate-pulse">✨ I will remind you to study for the exam on this day!</p>
                     )}
                   </div>
                 </div>
@@ -493,7 +494,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                       onChange={e => setEstimatedHours(e.target.value === '' ? 0 : parseInt(e.target.value))} 
                       className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-indigo-100 focus:border-indigo-600 outline-none text-slate-800 font-black text-center text-xl" 
                     />
-                    <p className="text-[9px] font-bold text-slate-400 text-center">How much time do you need to study? (hrs/week)</p>
+                    <p className="text-[9px] font-bold text-slate-400 text-center">How much time do you need to study each week?</p>
                   </div>
                   <div className="space-y-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Level of Importance</label>
@@ -533,17 +534,17 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             />
             <Sparkles className="text-indigo-600 animate-bounce relative z-10" size={56} />
             <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter relative z-10">AI Analyze</h3>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest relative z-10">Applying Eisenhower Logic to all nodes...</p>
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest relative z-10">I'm applying Eisenhower logic to all your tasks...</p>
           </motion.div>
         </div>
       )}
 
       {analyzingTaskId && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden"
+            className="bg-white w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden modal-content"
           >
             {isClassifying ? (
               <div className="py-12 flex flex-col items-center">
@@ -558,7 +559,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                     <Zap className="text-indigo-600 animate-pulse" size={32} />
                   </div>
                 </div>
-                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mt-8">Matrix Logic Processing</h2>
+                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mt-8">I'm processing the matrix logic...</h2>
                 <div className="mt-4 w-48 h-1 bg-slate-100 rounded-full overflow-hidden">
                   <motion.div 
                     animate={{ x: ['-100%', '100%'] }}

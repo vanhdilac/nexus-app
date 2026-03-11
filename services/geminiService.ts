@@ -4,11 +4,9 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY
-});
-
-// const ai = new GoogleGenAI(AIzaSyB6OGpMPyIh1B7_2Aa9dwOu5aX6DKvYo10);
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+// const aiInstance = new GoogleGenAI({ apiKey: key });
 
 export const geminiService = {
   classifyTask: async (task: Task, answers: { urgency: string, importance: string, pressure: string }) => {
@@ -98,16 +96,18 @@ export const geminiService = {
     const prompt = `Act as an expert academic coach. Create a 7-DAY study schedule starting from ${weekStartDate}.
     
     CRITICAL SCHEDULING LOGIC:
-    1. DEADLINE PRIORITY: Deadlines are the absolute priority. A task due on Feb 4 MUST be scheduled before a task due on Feb 5.
-    2. TODAY IS: ${todayDate}. Do not schedule anything in the past.
-    3. QUADRANT TIE-BREAKER: If two tasks have the same deadline, schedule "Do First" tasks before "Schedule" tasks.
-    4. SUSTAINABILITY: Max 3 study sessions (3 hours total) per day.
+    1. COMMITMENT PRIORITY: Scan user commitments first. NEVER schedule academic tasks during commitment slots.
+    2. DEADLINE PROXIMITY: If a slot is taken by a commitment, find the NEAREST available free slot, prioritizing slots as close to the task's deadline as possible.
+    3. DEADLINE PRIORITY: Deadlines are the absolute priority. A task due on Feb 4 MUST be scheduled before a task due on Feb 5.
+    4. TODAY IS: ${todayDate}. Do not schedule anything in the past.
+    5. QUADRANT TIE-BREAKER: If two tasks have the same deadline, schedule "Do First" tasks before "Schedule" tasks.
+    6. SUSTAINABILITY: Max 4 study sessions (4 hours total) per day.
 
     CONSTRAINTS:
     - SLOT DURATION: Each session MUST be 1 hour.
-    - BREAKS: 15-min gap between slots.
+    - BREAKS: 30-min gap between slots.
     - FORMAT: YYYY-MM-DD.
-    - BLOCKED: 12:00-13:00 (Lunch), 17:00-18:00 (Dinner), and 22:00-07:00 (Sleep).
+    - BLOCKED: 11:00-13:00 (Lunch), 17:00-19:00 (Dinner), and 22:00-07:00 (Sleep).
     
     TASKS TO SCHEDULE:
     ${analyzedTasks

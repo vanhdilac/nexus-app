@@ -16,9 +16,9 @@ export const notificationService = {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays === 2) {
-          reminders.push(`[Nexus Reminder] T-2: Kỳ thi "${task.title}" đang đến rất gần! Hãy tập trung ôn luyện ngay hôm nay để đạt kết quả tốt nhất nhé! 📚`);
+          reminders.push(`[Nexus Reminder] T-2: The exam for "${task.title}" is approaching! Focus on your revision today to achieve the best results! 📚`);
         } else if (diffDays === 1) {
-          reminders.push(`[Nexus Reminder] T-1: Ngày mai là kỳ thi "${task.title}" rồi! Đừng quên chuẩn bị đầy đủ đồ dùng: Thẻ sinh viên, bút, máy tính... và đi ngủ sớm nhé! 🎒✨`);
+          reminders.push(`[Nexus Reminder] T-1: Tomorrow is the exam for "${task.title}"! Don't forget to prepare everything: Student ID, pens, calculator... and get to bed early! 🎒✨`);
         }
       }
     });
