@@ -4,7 +4,9 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY
+});
 // const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 // const aiInstance = new GoogleGenAI({ apiKey: key });
 
