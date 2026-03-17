@@ -28,6 +28,8 @@ export const taskService = {
    * This implements "State Derivation" - the quadrant is a function of (task, now).
    */
   calculateQuadrant: (task: Task): EisenhowerQuadrant => {
+    if (task.manualQuadrant) return task.manualQuadrant;
+    
     const isUrgent = taskService.calculateUrgency(task);
     const isImportant = task.importance === TaskImportance.HIGH || task.importance === TaskImportance.MEDIUM;
 

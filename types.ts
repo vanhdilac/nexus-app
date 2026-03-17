@@ -34,6 +34,7 @@ export interface Task {
   isCompleted: boolean;
   completedAt?: number;
   createdAt: number;
+  manualQuadrant?: EisenhowerQuadrant;
 }
 
 export interface CalendarEvent {

@@ -22,32 +22,31 @@ export default function PetView({ user, onUserUpdated }: PetViewProps) {
   
   // Auto-initialize pet if missing (safety fallback)
   useEffect(() => {
-    if (!pet) {
-      const updated = authService.updateUser(user.id, {
-        pet: {
-          name: 'Buddy',
-          level: 0,
-          food: Math.floor((user.exp || 0) / 10), // Initial conversion
-          colorTheme: 1 as 1 | 2 | 3,
-          isSleeping: false,
-          lastSleepTime: 0,
-          isHidden: false
-        }
-      });
-      if (updated) onUserUpdated(updated);
-    } else if (pet.food === 0 && user.exp >= 10) {
-      // One-time migration check if food is 0 but user has EXP
-      // We only do this if pet.food is exactly 0 to avoid double conversion
-      // But user might have spent food. Let's use a more specific check or just trust the initial conversion.
-      // Actually, let's just add a button or a check that converts if food is 0.
-      const foodFromExp = Math.floor(user.exp / 10);
-      if (foodFromExp > 0) {
-        const updated = authService.updateUser(user.id, {
-          pet: { ...pet, food: foodFromExp }
+    const initPet = async () => {
+      if (!pet) {
+        const updated = await authService.updateUser(user.id, {
+          pet: {
+            name: 'Buddy',
+            level: 0,
+            food: Math.floor((user.exp || 0) / 10), // Initial conversion
+            colorTheme: 1 as 1 | 2 | 3,
+            isSleeping: false,
+            lastSleepTime: 0,
+            isHidden: false
+          }
         });
         if (updated) onUserUpdated(updated);
+      } else if (pet.food === 0 && user.exp >= 10) {
+        const foodFromExp = Math.floor(user.exp / 10);
+        if (foodFromExp > 0) {
+          const updated = await authService.updateUser(user.id, {
+            pet: { ...pet, food: foodFromExp }
+          });
+          if (updated) onUserUpdated(updated);
+        }
       }
-    }
+    };
+    initPet();
   }, [pet, user.id, user.exp, onUserUpdated]);
 
   // If pet is missing, show a loading state briefly while it initializes
@@ -56,17 +55,17 @@ export default function PetView({ user, onUserUpdated }: PetViewProps) {
       <div className="min-h-[700px] flex items-center justify-center bg-slate-50 rounded-[3rem]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-          <div className="animate-pulse text-slate-400 font-black uppercase tracking-widest">Initializing pet...</div>
+          <div className="animate-pulse text-slate-400 font-black uppercase tracking-widest">Pet under maintenance...</div>
         </div>
       </div>
     );
   }
 
-  const handlePetting = () => {
+  const handlePetting = async () => {
     setIsPetting(true);
     
     // Update last petted time
-    const updated = authService.updateUser(user.id, {
+    const updated = await authService.updateUser(user.id, {
       pet: { ...pet, lastPettedTime: Date.now() }
     });
     if (updated) onUserUpdated(updated);
@@ -79,11 +78,10 @@ export default function PetView({ user, onUserUpdated }: PetViewProps) {
     return 10 + (currentLevel * 2);
   };
 
-  const handleFeeding = () => {
+  const handleFeeding = async () => {
     const foodNeeded = getFoodNeededForNextLevel(pet.level);
     
     if (pet.food < foodNeeded) {
-      alert(`You need ${foodNeeded} food to reach the next level! You currently have ${pet.food}. Complete more tasks! 🍱`);
       return;
     }
 
@@ -92,7 +90,7 @@ export default function PetView({ user, onUserUpdated }: PetViewProps) {
     const newFood = pet.food - foodNeeded;
     const newLevel = pet.level + 1;
     
-    const updated = authService.updateUser(user.id, {
+    const updated = await authService.updateUser(user.id, {
       pet: { ...pet, food: newFood, level: newLevel }
     });
     
@@ -109,15 +107,15 @@ export default function PetView({ user, onUserUpdated }: PetViewProps) {
     setTimeout(() => setIsFeeding(false), 1000);
   };
 
-  const handleThemeChange = (theme: 1 | 2 | 3) => {
-    const updated = authService.updateUser(user.id, {
+  const handleThemeChange = async (theme: 1 | 2 | 3) => {
+    const updated = await authService.updateUser(user.id, {
       pet: { ...pet, colorTheme: theme }
     });
     if (updated) onUserUpdated(updated);
   };
 
-  const handleNameSave = () => {
-    const updated = authService.updateUser(user.id, {
+  const handleNameSave = async () => {
+    const updated = await authService.updateUser(user.id, {
       pet: { ...pet, name: newName }
     });
     if (updated) onUserUpdated(updated);

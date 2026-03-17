@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
+import { auth } from '../firebase';
 import { authService } from '../services/authService';
 import { ArrowRight, UserCircle, Hash, Lock, AlertCircle, Info } from 'lucide-react';
 
@@ -41,7 +42,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     return regex.test(id);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -49,30 +51,127 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const formattedId = studentId.toUpperCase();
 
     if (!validateStudentId(formattedId)) {
-      setError('Invalid format. Please use your official Student ID (e.g., DE210001).');
+      setError('Invalid Student ID format. Please use the official format that FPT University provides. (e.g., DE210001).');
       return;
     }
 
     try {
       if (isLogin) {
-        const user = authService.login(formattedId, password);
-        if (user) onLogin(user);
-        else setError('Student ID not found or incorrect password.');
+        const loginEmail = email || `${formattedId.toLowerCase()}@fpt.edu.vn`;
+        const user = await authService.login(loginEmail, password);
+        if (user) {
+          onLogin(user);
+        } else {
+          // If login successful but no profile, create one automatically
+          const firebaseUser = auth.currentUser;
+          if (firebaseUser) {
+            const newUser: User = {
+              id: firebaseUser.uid,
+              username: username || firebaseUser.email?.split('@')[0] || 'Student',
+              studentId: formattedId,
+              email: firebaseUser.email || '',
+              exp: 0,
+              level: 1,
+              streak: 0,
+              hasSeenOnboarding: false,
+              createdAt: Date.now(),
+              pet: {
+                name: 'Buddy',
+                level: 0,
+                food: 0,
+                colorTheme: 1,
+                isSleeping: false,
+                lastSleepTime: 0,
+                isHidden: false
+              }
+            };
+            await authService.updateUser(firebaseUser.uid, newUser);
+            onLogin(newUser);
+          } else {
+            setError('Invalid credentials or account not registered.');
+          }
+        }
       } else {
+        // Registration
         if (!username.trim()) {
           setError('Please enter your full name.');
           return;
         }
+        
         if (!email.trim() || !email.includes('@')) {
           setError('Please enter a valid email address.');
           return;
         }
-        const user = authService.register(username, formattedId, email, password);
-        if (user) onLogin(user);
-        else setError('This Student ID is already registered.');
+
+        try {
+          const user = await authService.register(username, formattedId, email, password);
+          if (user) onLogin(user);
+        } catch (regErr: any) {
+          if (regErr.message?.includes('auth/email-already-in-use')) {
+            // If already registered in Auth but no profile in Firestore
+            const user = await authService.login(email, password);
+            if (user) {
+              onLogin(user);
+            } else {
+              const firebaseUser = auth.currentUser;
+              if (firebaseUser) {
+                // Auto-create profile and go to dashboard
+                const newUser: User = {
+                  id: firebaseUser.uid,
+                  username: username,
+                  studentId: formattedId,
+                  email: firebaseUser.email || '',
+                  exp: 0,
+                  level: 1,
+                  streak: 0,
+                  hasSeenOnboarding: false,
+                  createdAt: Date.now(),
+                  pet: {
+                    name: 'Buddy',
+                    level: 0,
+                    food: 0,
+                    colorTheme: 1,
+                    isSleeping: false,
+                    lastSleepTime: 0,
+                    isHidden: false
+                  }
+                };
+                await authService.updateUser(firebaseUser.uid, newUser);
+                onLogin(newUser);
+              } else {
+                setError('This email is already registered. Please log in.');
+              }
+            }
+          } else {
+            throw regErr;
+          }
+        }
       }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again later.');
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      let errorMessage = err.message || 'Please try again later.';
+      
+      // Try to parse JSON error from handleFirestoreError
+      try {
+        if (errorMessage.startsWith('{')) {
+          const errInfo = JSON.parse(errorMessage);
+          errorMessage = `Database Error: ${errInfo.error}. (Operation: ${errInfo.operationType})`;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+
+      if (err.message?.includes('auth/operation-not-allowed')) {
+        setError('Error: Email/Password sign-in is not enabled in Firebase Console.');
+      } else if (err.message?.includes('auth/user-not-found') || err.message?.includes('auth/invalid-credential')) {
+        setError('Invalid credentials. If you are new, please "Create an account" below.');
+      } else if (err.message?.includes('auth/wrong-password')) {
+        setError('Incorrect password. Please try again.');
+      } else if (err.message?.includes('auth/email-already-in-use')) {
+        setError('This Email or Student ID is already registered. Please log in.');
+      } else {
+        setError('An error occurred: ' + errorMessage);
+      }
     }
   };
 
@@ -81,69 +180,27 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setError('');
     setSuccess('');
     
-    const user = authService.getUserByStudentId(studentId);
-    if (!user) {
-      setError('Student ID not found.');
+    if (!email.trim()) {
+      setError('Please enter your email address to reset password.');
       return;
     }
 
-    const code = authService.requestPasswordReset(studentId);
-    if (code) {
-      setResetCode(code);
-      
-      try {
-        const response = await fetch('/api/send-reset-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: user.email,
-            code: code,
-            studentId: user.studentId,
-            username: user.username
-          })
-        });
-
-        if (response.ok) {
-          setResetStep('verify');
-          setSuccess(`A recovery code has been sent to your email: ${user.email}.`);
-        } else {
-          const data = await response.json();
-          setError(data.error || 'Failed to send recovery code. Please try again.');
-        }
-      } catch (err) {
-        console.error("Error calling reset API:", err);
-        setError('Could not connect to the email service. Please check your connection.');
-      }
-    } else {
-      setError('Failed to generate recovery code.');
+    try {
+      await authService.requestPasswordReset(email);
+      setSuccess(`A password reset link has been sent to your email: ${email}.`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email.');
     }
   };
 
   const handleVerifyCode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (authService.verifyResetCode(studentId, inputCode)) {
-      setResetStep('reset');
-      setError('');
-    } else {
-      setError('Invalid recovery code.');
-    }
+    // Firebase handles this via email link
   };
 
   const handleResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (authService.resetPassword(studentId, newPassword)) {
-      setSuccess('Password reset successful! You can now log in.');
-      setIsForgotPassword(false);
-      setIsLogin(true);
-      setResetStep('request');
-      setPassword('');
-    } else {
-      setError('Failed to reset password.');
-    }
+    // Firebase handles this via email link
   };
 
   if (isForgotPassword) {
@@ -273,36 +330,37 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {!isLogin && (
-                <>
-                  <div className="text-left">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Full Name</label>
-                    <div className="relative">
-                      <UserCircle className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('username', username) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
-                      <input 
-                        type="text" required
-                        value={username} onChange={e => setUsername(e.target.value)}
-                        onBlur={() => handleBlur('username')}
-                        className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('username', username) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
-                        placeholder="Enter full name"
-                      />
-                    </div>
-                    {isFieldInvalid('username', username) && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">This field is required</p>}
+                <div className="text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Full Name</label>
+                  <div className="relative">
+                    <UserCircle className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('username', username) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
+                    <input 
+                      type="text" required
+                      value={username} onChange={e => setUsername(e.target.value)}
+                      onBlur={() => handleBlur('username')}
+                      className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('username', username) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
+                      placeholder="Enter full name"
+                    />
                   </div>
-                  <div className="text-left">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Email Address</label>
-                    <div className="relative">
-                      <Info className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('email', email) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
-                      <input 
-                        type="email" required
-                        value={email} onChange={e => setEmail(e.target.value)}
-                        onBlur={() => handleBlur('email')}
-                        className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('email', email) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
-                        placeholder="student@fpt.edu.vn"
-                      />
-                    </div>
-                    {isFieldInvalid('email', email) && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">This field is required</p>}
+                  {isFieldInvalid('username', username) && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">This field is required</p>}
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Email Address</label>
+                  <div className="relative">
+                    <Info className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('email', email) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
+                    <input 
+                      type="email" required
+                      value={email} onChange={e => setEmail(e.target.value)}
+                      onBlur={() => handleBlur('email')}
+                      className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('email', email) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
+                      placeholder="studentmail@gmail.com"
+                    />
                   </div>
-                </>
+                  {isFieldInvalid('email', email) && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">This field is required</p>}
+                </div>
               )}
               
               <div className="text-left">
@@ -359,9 +417,23 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 bg-rose-50 p-4 rounded-xl border border-rose-100">
-                  <AlertCircle size={16} className="text-rose-500 shrink-0" />
-                  <p className="text-rose-600 text-xs font-bold">{error}</p>
+                <div className="flex flex-col gap-2 bg-rose-50 p-4 rounded-xl border border-rose-100 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-500 shrink-0" />
+                    <p className="text-rose-600 text-xs font-bold leading-relaxed">{error}</p>
+                  </div>
+                  {error.includes('Database Error') && (
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        await authService.logout();
+                        window.location.reload();
+                      }}
+                      className="text-[10px] font-black uppercase tracking-widest text-rose-600 hover:text-rose-800 underline text-left ml-6"
+                    >
+                      Sign Out & Try Again
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -374,14 +446,18 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               </button>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center space-y-4">
               <button 
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setError('');
                   setSuccess('');
+                  setUsername('');
+                  setEmail('');
+                  setStudentId('');
+                  setPassword('');
                 }}
-                className="text-xs font-bold text-slate-500 hover:text-accent transition-colors uppercase tracking-tight"
+                className="block w-full text-xs font-bold text-slate-500 hover:text-accent transition-colors uppercase tracking-tight"
               >
                 {isLogin ? "New student? Create an account" : "Already registered? Sign in here"}
               </button>

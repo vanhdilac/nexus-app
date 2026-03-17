@@ -1,0 +1,60 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "studentId": { "type": "string" },
+        "email": { "type": "string" },
+        "exp": { "type": "number" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "hasSeenOnboarding": { "type": "boolean" }
+      },
+      "required": ["id", "username", "email"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Academic task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "isCompleted": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "title"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "Event in the study planner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "User tasks"
+    },
+    "/calendar/{eventId}": {
+      "schema": "CalendarEvent",
+      "description": "User calendar events"
+    }
+  }
+}

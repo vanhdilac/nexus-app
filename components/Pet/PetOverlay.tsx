@@ -29,7 +29,7 @@ export default function PetOverlay({ user, onUserUpdated }: PetOverlayProps) {
   useEffect(() => {
     if (!pet || pet.level === 0) return;
     
-    const checkSleep = () => {
+    const checkSleep = async () => {
       const now = Date.now();
       const threeHours = 3 * 60 * 60 * 1000;
       const sleepDuration = 30 * 60 * 1000; // Let's say it sleeps for 30 mins every 3 hours
@@ -39,14 +39,14 @@ export default function PetOverlay({ user, onUserUpdated }: PetOverlayProps) {
       if (timeSinceLastSleep >= threeHours) {
         // Time to sleep
         if (!pet.isSleeping) {
-          const updated = authService.updateUser(user.id, {
+          const updated = await authService.updateUser(user.id, {
             pet: { ...pet, isSleeping: true, lastSleepTime: now }
           });
           if (updated) onUserUpdated(updated);
         }
       } else if (pet.isSleeping && timeSinceLastSleep >= sleepDuration) {
         // Wake up
-        const updated = authService.updateUser(user.id, {
+        const updated = await authService.updateUser(user.id, {
           pet: { ...pet, isSleeping: false }
         });
         if (updated) onUserUpdated(updated);
@@ -107,10 +107,10 @@ export default function PetOverlay({ user, onUserUpdated }: PetOverlayProps) {
     setPosition({ x: info.point.x - 50, y: info.point.y - 50 });
   };
 
-  const handleHide = () => {
+  const handleHide = async () => {
     setIsPuffing(true);
-    setTimeout(() => {
-      const updated = authService.updateUser(user.id, {
+    setTimeout(async () => {
+      const updated = await authService.updateUser(user.id, {
         pet: { ...pet, isHidden: true }
       });
       if (updated) onUserUpdated(updated);
@@ -118,15 +118,14 @@ export default function PetOverlay({ user, onUserUpdated }: PetOverlayProps) {
     }, 500);
   };
 
-  const handleSummon = () => {
+  const handleSummon = async () => {
     if (pet.isSleeping) {
-      alert(`${pet.name} is sleeping, play with them later! 😴`);
       return;
     }
     
     setIsPuffing(true);
-    setTimeout(() => {
-      const updated = authService.updateUser(user.id, {
+    setTimeout(async () => {
+      const updated = await authService.updateUser(user.id, {
         pet: { ...pet, isHidden: false }
       });
       if (updated) onUserUpdated(updated);

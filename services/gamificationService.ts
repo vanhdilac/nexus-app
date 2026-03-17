@@ -39,8 +39,8 @@ export const gamificationService = {
     return { level, progress, nextLevelExp: 500 };
   },
 
-  updateUserProgress: (userId: string, expGain: number): { user: User | null, leveledUp: boolean } => {
-    const user = authService.getCurrentUser();
+  updateUserProgress: async (userId: string, expGain: number): Promise<{ user: User | null, leveledUp: boolean }> => {
+    const user = await authService.getCurrentUser();
     if (!user || user.id !== userId) return { user: null, leveledUp: false };
 
     const currentExp = (isNaN(user.exp) || user.exp === undefined || user.exp === null) ? 0 : user.exp;
@@ -69,7 +69,7 @@ export const gamificationService = {
       };
     }
 
-    const updatedUser = authService.updateUser(userId, updates);
+    const updatedUser = await authService.updateUser(userId, updates);
     return { 
       user: updatedUser, 
       leveledUp: newLevel > oldLevel 

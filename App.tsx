@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { User, Task, CalendarEvent } from './types';
 import { storageService } from './services/storageService';
 import { authService } from './services/authService';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
 import TaskList from './components/Tasks/TaskList';
@@ -32,6 +34,7 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -40,24 +43,81 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Refresh every minute to update dynamic quadrants
+    }, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, []);
 
+  // Clean up old localStorage data to ensure a clean Firebase-only system
   useEffect(() => {
-    const loggedInUser = authService.getCurrentUser();
-    if (loggedInUser) {
-      const updatedUser = authService.checkAndUpdateStreak(loggedInUser);
-      const finalUser = updatedUser || loggedInUser;
-      setUser(finalUser);
-      refreshData(finalUser.id);
-      
-      // Show onboarding if first time
-      if (!finalUser.hasSeenOnboarding) {
-        setShowOnboarding(true);
+    const oldKeys = ['nexus_user', 'nexus_tasks', 'nexus_calendar', 'nexus_app_data'];
+    oldKeys.forEach(key => {
+      if (localStorage.getItem(key)) {
+        localStorage.removeItem(key);
       }
-    }
+    });
   }, []);
+
+  // Firebase Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userData = await storageService.getUser(firebaseUser.uid);
+        if (userData) {
+          const updatedUser = await authService.checkAndUpdateStreak(userData);
+          const finalUser = updatedUser || userData;
+          setUser(finalUser);
+          
+          if (!finalUser.hasSeenOnboarding) {
+            setShowOnboarding(true);
+          }
+        }
+      } else {
+        setUser(null);
+        setTasks([]);
+        setCalendar([]);
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time Data Listeners
+  useEffect(() => {
+    if (user) {
+      const unsubscribeTasks = storageService.subscribeToTasks(user.id, (newTasks) => {
+        setTasks(newTasks);
+      });
+      const unsubscribeCalendar = storageService.subscribeToCalendar(user.id, (newEvents) => {
+        setCalendar(newEvents);
+      });
+
+      return () => {
+        unsubscribeTasks();
+        unsubscribeCalendar();
+      };
+    }
+  }, [user?.id]);
+
+  // Auto-delete logic: 15 minutes after completion
+  useEffect(() => {
+    if (user && tasks.length > 0) {
+      const interval = setInterval(() => {
+        const now = Date.now();
+        const fifteenMinutes = 15 * 60 * 1000;
+        
+        tasks.forEach(task => {
+          if (task.isCompleted && task.completedAt) {
+            if (now - task.completedAt >= fifteenMinutes) {
+              storageService.deleteTask(task.id);
+            }
+          }
+        });
+      }, 60000); // Check every minute
+
+      return () => clearInterval(interval);
+    }
+  }, [user, tasks]);
 
   useEffect(() => {
     if (user) {
@@ -65,13 +125,6 @@ export default function App() {
         const now = new Date();
         const hours = now.getHours();
         const today = now.toISOString().split('T')[0];
-        
-        // If it's 9 PM or later and user hasn't been active today (though they are active now if they see this)
-        // Actually, the streak is updated on load, so lastActiveDate will be today.
-        // We need to check if they *would* have lost it if they didn't log in.
-        // But the requirement says: "khi còn 3 tiếng sẽ mất streak ( vào lúc 9h tối ) thì gửi thông báo cho user về việc sắp mất streak."
-        // This implies a background check or checking for *tomorrow's* risk if they haven't logged in today yet.
-        // Since the app is client-side, we can only notify while the app is open.
         
         if (hours >= 21 && user.lastActiveDate !== today) {
           setNotifications(prev => [...prev, "🔥 Hey! The day is almost over! Keep your streak alive, only 3 hours left!"]);
@@ -106,7 +159,6 @@ export default function App() {
       if (user.themeColor) {
         document.documentElement.style.setProperty('--accent', user.themeColor);
         
-        // Convert hex to RGB for shadows and transparent backgrounds
         const r = parseInt(user.themeColor.slice(1, 3), 16);
         const g = parseInt(user.themeColor.slice(3, 5), 16);
         const b = parseInt(user.themeColor.slice(5, 7), 16);
@@ -115,42 +167,41 @@ export default function App() {
     }
   }, [user?.isDarkMode, user?.themeColor]);
 
-  const refreshData = (userId: string) => {
-    setTasks(storageService.getTasksByUserId(userId));
-    setCalendar(storageService.getCalendarByUserId(userId));
+  const handleLogin = async (u: User) => {
+    const updatedUser = await authService.checkAndUpdateStreak(u);
+    setUser(updatedUser || u);
   };
 
-  const handleLogin = (u: User) => {
-    const updatedUser = authService.checkAndUpdateStreak(u);
-    const finalUser = updatedUser || u;
-    setUser(finalUser);
-    refreshData(finalUser.id);
-  };
-
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setUser(null);
-    setTasks([]);
-    setCalendar([]);
   };
 
-  const handleCloseOnboarding = () => {
+  const handleCloseOnboarding = async () => {
     if (user) {
-      const updated = authService.updateUser(user.id, { hasSeenOnboarding: true });
+      const updated = await authService.updateUser(user.id, { hasSeenOnboarding: true });
       if (updated) setUser(updated);
     }
     setShowOnboarding(false);
   };
 
-  const handleUpdateTask = (taskId: string, updates: Partial<Task>) => {
-    const data = storageService.getData();
-    const taskIndex = data.tasks.findIndex(t => t.id === taskId);
-    if (taskIndex !== -1) {
-      data.tasks[taskIndex] = { ...data.tasks[taskIndex], ...updates };
-      storageService.saveData(data);
-      if (user) refreshData(user.id);
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      await storageService.saveTask({ ...task, ...updates });
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <NexusLogo size={64} className="animate-pulse" />
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <AuthScreen onLogin={handleLogin} />;
@@ -161,11 +212,11 @@ export default function App() {
       case 'dashboard':
         return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
       case 'tasks':
-        return <TaskList tasks={tasks} calendar={calendar} userId={user.id} onTasksUpdated={() => refreshData(user.id)} onUserUpdated={(u) => setUser(u)} />;
+        return <TaskList tasks={tasks} calendar={calendar} userId={user.id} onTasksUpdated={() => {}} onUserUpdated={(u) => setUser(u)} />;
       case 'matrix':
         return <MatrixView tasks={tasks} onUpdateTask={handleUpdateTask} />;
       case 'calendar':
-        return <CalendarView tasks={tasks} userId={user.id} calendar={calendar} onCalendarUpdated={() => refreshData(user.id)} onTasksUpdated={() => refreshData(user.id)} onUserUpdated={(u) => setUser(u)} />;
+        return <CalendarView tasks={tasks} userId={user.id} calendar={calendar} onCalendarUpdated={() => {}} onTasksUpdated={() => {}} onUserUpdated={(u) => setUser(u)} />;
       case 'profile':
         return <ProfileView user={user} onUserUpdated={(updatedUser) => setUser(updatedUser)} />;
       case 'feedback':

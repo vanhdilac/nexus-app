@@ -57,10 +57,14 @@ export default function NewCommitmentModal({ isOpen, onClose, onAdd, userId }: N
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div 
+      className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
+        onClick={e => e.stopPropagation()}
         className="bg-white w-full max-w-xl rounded-[3rem] p-10 shadow-2xl border border-slate-200 overflow-y-auto max-h-[90vh]"
       >
         <div className="flex justify-between items-center mb-8">

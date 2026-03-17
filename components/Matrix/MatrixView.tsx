@@ -49,16 +49,11 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
     if (over && active.id !== over.id) {
       const taskId = active.id as string;
       const newQuadrant = over.id as EisenhowerQuadrant;
-      const task = tasks.find(t => t.id === taskId);
       
-      if (task) {
-        // If user drags to a new quadrant, we update the importance to match
-        // since urgency is fixed by the deadline.
-        const isTargetImportant = newQuadrant === EisenhowerQuadrant.DO_FIRST || newQuadrant === EisenhowerQuadrant.SCHEDULE;
-        onUpdateTask(taskId, { 
-          importance: isTargetImportant ? TaskImportance.HIGH : TaskImportance.LOW 
-        });
-      }
+      onUpdateTask(taskId, { 
+        manualQuadrant: newQuadrant,
+        isAnalyzed: true
+      });
     }
   };
 
@@ -96,14 +91,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
               {unanalyzedTasks.map(task => (
-                <div key={task.id} className="bg-white p-6 rounded-3xl shadow-sm border border-transparent hover:border-white transition-all group">
-                  <h4 className="font-bold text-slate-800 line-clamp-1 mb-2">{task.title}</h4>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed break-words whitespace-pre-wrap">{task.description || 'No description'}</p>
-                  <div className="flex items-center justify-between border-t border-slate-50 pt-4">
-                     <span className="text-[9px] font-black text-accent bg-orange-50 px-2 py-1 rounded-full uppercase">Waiting</span>
-                     <Brain size={16} className="text-slate-200 group-hover:text-accent transition-colors" />
-                  </div>
-                </div>
+                <DraggableTask key={task.id} task={task} />
               ))}
             </div>
           </div>
@@ -227,15 +215,7 @@ const DraggableTask = ({ task }: { task: Task, key?: string }) => {
           <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0" />
           <span className="font-bold text-slate-800 text-sm truncate">{task.title}</span>
         </div>
-        <Info size={16} className="text-slate-300 group-hover:text-accent transition-colors shrink-0" />
       </div>
-
-      {hovered && !isDragging && (
-        <div className="mt-3 bg-slate-900 text-white p-6 rounded-[2rem] text-sm shadow-2xl animate-in fade-in slide-in-from-top-4">
-          <p className="font-black text-accent uppercase tracking-widest text-[10px] mb-2">AI Reasoning</p>
-          <p className="leading-relaxed font-medium text-slate-200 italic">"{task.reasoning}"</p>
-        </div>
-      )}
     </div>
   );
 };

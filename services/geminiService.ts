@@ -4,9 +4,7 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY
-});
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 // const aiInstance = new GoogleGenAI({ apiKey: key });
 
@@ -97,13 +95,14 @@ export const geminiService = {
     
     const prompt = `Act as an expert academic coach. Create a 7-DAY study schedule starting from ${weekStartDate}.
     
-    CRITICAL SCHEDULING LOGIC:
-    1. COMMITMENT PRIORITY: Scan user commitments first. NEVER schedule academic tasks during commitment slots.
-    2. DEADLINE PROXIMITY: If a slot is taken by a commitment, find the NEAREST available free slot, prioritizing slots as close to the task's deadline as possible.
-    3. DEADLINE PRIORITY: Deadlines are the absolute priority. A task due on Feb 4 MUST be scheduled before a task due on Feb 5.
+    CRITICAL SCHEDULING LOGIC (SPACED LEARNING):
+    1. SPACED LEARNING: For each task, spread the required study hours EVENLY across the days from the task's creation date until its deadline. 
+       - Example: If a task was created on March 18 and is due on March 21 (3 days gap), and needs 3 hours, schedule 1 hour on the 18th, 1 hour on the 19th, and 1 hour on the 20th.
+       - DO NOT cluster all hours on the day before the deadline.
+    2. COMMITMENT PRIORITY: Scan user commitments first. NEVER schedule academic tasks during commitment slots.
+    3. DEADLINE PROXIMITY: If a slot is taken by a commitment, find the NEAREST available free slot.
     4. TODAY IS: ${todayDate}. Do not schedule anything in the past.
-    5. QUADRANT TIE-BREAKER: If two tasks have the same deadline, schedule "Do First" tasks before "Schedule" tasks.
-    6. SUSTAINABILITY: Max 4 study sessions (4 hours total) per day.
+    5. SUSTAINABILITY: Max 4 study sessions (4 hours total) per day.
 
     CONSTRAINTS:
     - SLOT DURATION: Each session MUST be 1 hour.
@@ -114,7 +113,10 @@ export const geminiService = {
     TASKS TO SCHEDULE:
     ${analyzedTasks
       .sort((a, b) => a.deadline.localeCompare(b.deadline))
-      .map(t => `- [${t.quadrant}] "${t.title}" (Needs ${t.estimatedHours}h). DUE: ${t.deadline}`).join('\n')}
+      .map(t => {
+        const createdDate = new Date(t.createdAt).toISOString().split('T')[0];
+        return `- [${t.quadrant}] "${t.title}" (Needs ${t.estimatedHours}h). CREATED: ${createdDate}, DUE: ${t.deadline}`;
+      }).join('\n')}
 
     USER COMMITMENTS (Do not overlap):
     ${commitments.map(c => `- ${c.title} on ${c.date} from ${c.startTime} to ${c.endTime}`).join('\n')}
@@ -145,5 +147,29 @@ export const geminiService = {
     });
 
     return JSON.parse(response.text || '[]') as Omit<CalendarEvent, 'id' | 'userId' | 'day'>[];
+  },
+
+  generateMotivationalQuote: async () => {
+    const prompt = `Generate a short, powerful motivational quote in English for a student. 
+    Focus on academic success, perseverance, and focus. 
+    Return a JSON object with 'quote' and 'author'.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            quote: { type: Type.STRING },
+            author: { type: Type.STRING }
+          },
+          required: ["quote", "author"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || '{}') as { quote: string, author: string };
   }
 };

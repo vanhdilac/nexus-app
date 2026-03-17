@@ -1,35 +1,40 @@
 
 import { User } from '../types';
 import { storageService } from './storageService';
-
-const AUTH_KEY = 'nexus_auth_user';
+import { auth, db } from '../firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  deleteUser
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const authService = {
-  getCurrentUser: (): User | null => {
-    const user = localStorage.getItem(AUTH_KEY);
-    return user ? JSON.parse(user) : null;
+  getCurrentUser: async (): Promise<User | null> => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return null;
+    return await storageService.getUser(firebaseUser.uid);
   },
 
-  login: (studentId: string, password?: string): User | null => {
-    const data = storageService.getData();
-    const user = data.users.find(u => u.studentId === studentId && u.password === password);
-    if (user) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-      return user;
-    }
-    return null;
+  login: async (email: string, password?: string): Promise<User | null> => {
+    if (!password) return null;
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return await storageService.getUser(userCredential.user.uid);
   },
 
-  register: (username: string, studentId: string, email: string, password?: string): User | null => {
-    const data = storageService.getData();
-    if (data.users.find(u => u.studentId === studentId)) return null;
+  register: async (username: string, studentId: string, email: string, password?: string): Promise<User | null> => {
+    if (!password) return null;
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userId = userCredential.user.uid;
 
     const newUser: User = {
-      id: crypto.randomUUID(),
+      id: userId,
       username,
-      studentId,
+      studentId: studentId.toUpperCase(),
       email,
-      password,
       exp: 0,
       level: 1,
       streak: 0,
@@ -46,68 +51,38 @@ export const authService = {
       }
     };
 
-    data.users.push(newUser);
-    storageService.saveData(data);
-    localStorage.setItem(AUTH_KEY, JSON.stringify(newUser));
+    await storageService.saveUser(newUser);
     return newUser;
   },
 
-  logout: (): void => {
-    localStorage.removeItem(AUTH_KEY);
+  logout: async (): Promise<void> => {
+    await signOut(auth);
   },
 
-  getUserByStudentId: (studentId: string): User | null => {
-    const data = storageService.getData();
-    return data.users.find(u => u.studentId === studentId.toUpperCase()) || null;
-  },
-
-  requestPasswordReset: (studentId: string): string | null => {
-    const data = storageService.getData();
-    const user = data.users.find(u => u.studentId === studentId.toUpperCase());
-    if (!user) return null;
-
-    // Generate a code and store it
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem(`reset_code_${user.studentId}`, resetCode);
-    
-    return resetCode;
-  },
-
-  verifyResetCode: (studentId: string, code: string): boolean => {
-    const storedCode = localStorage.getItem(`reset_code_${studentId.toUpperCase()}`);
-    return storedCode === code;
-  },
-
-  resetPassword: (studentId: string, newPassword: string): boolean => {
-    const data = storageService.getData();
-    const userIndex = data.users.findIndex(u => u.studentId === studentId.toUpperCase());
-    if (userIndex === -1) return false;
-
-    data.users[userIndex].password = newPassword;
-    storageService.saveData(data);
-    localStorage.removeItem(`reset_code_${studentId.toUpperCase()}`);
-    return true;
-  },
-
-  updateUser: (userId: string, updates: Partial<User>): User | null => {
-    const data = storageService.getData();
-    const userIndex = data.users.findIndex(u => u.id === userId);
-    if (userIndex === -1) return null;
-
-    const updatedUser = { ...data.users[userIndex], ...updates };
-    data.users[userIndex] = updatedUser;
-    storageService.saveData(data);
-
-    // Update current session if it's the same user
-    const currentUser = authService.getCurrentUser();
-    if (currentUser && currentUser.id === userId) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+  deleteCurrentAccount: async (): Promise<void> => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      await deleteUser(user);
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      throw error;
     }
+  },
 
+  requestPasswordReset: async (email: string): Promise<void> => {
+    await sendPasswordResetEmail(auth, email);
+  },
+
+  updateUser: async (userId: string, updates: Partial<User>): Promise<User | null> => {
+    // Force save without checking existence to prevent stuck states
+    const user = await storageService.getUser(userId);
+    const updatedUser = { ...(user || {}), ...updates } as User;
+    await storageService.saveUser(updatedUser);
     return updatedUser;
   },
 
-  checkAndUpdateStreak: (user: User): User | null => {
+  checkAndUpdateStreak: async (user: User): Promise<User | null> => {
     const today = new Date().toISOString().split('T')[0];
     const lastActive = user.lastActiveDate;
 
@@ -127,7 +102,7 @@ export const authService = {
 
     if (lastActive === today) {
       if (!user.pet) {
-        return authService.updateUser(user.id, petUpdate);
+        return await authService.updateUser(user.id, petUpdate);
       }
       return user;
     }
@@ -143,7 +118,7 @@ export const authService = {
       newStreak = 1; // Reset to 1 since they are logging in today
     }
 
-    return authService.updateUser(user.id, { 
+    return await authService.updateUser(user.id, { 
       streak: newStreak, 
       lastActiveDate: today,
       ...petUpdate

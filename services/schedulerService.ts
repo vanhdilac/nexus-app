@@ -192,23 +192,50 @@ export const schedulerService = {
       return false;
     };
 
-    // Process each task with Deadline-Proximity strategy and 1h block constraint
+    // Process each task with Spaced Learning strategy
     for (const task of sortedTasks) {
       let remainingHours = task.estimatedHours || 1;
       
-      while (remainingHours > 0) {
-        const hoursToSchedule = Math.min(remainingHours, 1); // Max 1h per block
-        
-        // Pass 1: Proximity Window (72h before deadline)
-        let scheduled = tryScheduleTask(task, weekDays, true, hoursToSchedule);
-        
-        if (!scheduled) {
-          // Pass 2: Fallback (Anytime before 3h buffer)
-          scheduled = tryScheduleTask(task, weekDays, false, hoursToSchedule);
-        }
+      // Calculate days available from creation to deadline
+      const creationDate = new Date(task.createdAt);
+      creationDate.setHours(0, 0, 0, 0);
+      const deadlineDate = new Date(task.deadline);
+      deadlineDate.setHours(0, 0, 0, 0);
+      
+      // Filter weekDays that are between creation and deadline
+      const availableDays = weekDays.filter(d => {
+        const dayDate = new Date(d);
+        return dayDate >= creationDate && dayDate < deadlineDate;
+      });
 
-        if (!scheduled) break; // Could not schedule this block, move to next task
-        remainingHours -= hoursToSchedule;
+      if (availableDays.length === 0) {
+        availableDays.push(...weekDays.filter(d => new Date(d) < deadlineDate));
+      }
+
+      // Spread hours across available days
+      const hoursPerDay = Math.ceil(remainingHours / availableDays.length);
+      
+      for (const dateStr of availableDays) {
+        if (remainingHours <= 0) break;
+        
+        let scheduledToday = 0;
+        const maxToday = Math.min(hoursPerDay, remainingHours);
+        
+        while (scheduledToday < maxToday && remainingHours > 0) {
+          const scheduled = tryScheduleTask(task, [dateStr], false, 1);
+          if (scheduled) {
+            scheduledToday++;
+            remainingHours--;
+          } else {
+            break;
+          }
+        }
+      }
+      
+      while (remainingHours > 0) {
+        const scheduled = tryScheduleTask(task, weekDays, false, 1);
+        if (!scheduled) break;
+        remainingHours--;
       }
     }
 

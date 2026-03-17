@@ -1,69 +1,194 @@
 
-import { AppData, User, Task, CalendarEvent } from '../types';
+import { AppData, User, Task, CalendarEvent, Feedback } from '../types';
+import { db, auth } from '../firebase';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  deleteDoc,
+  updateDoc,
+  onSnapshot
+} from 'firebase/firestore';
 
-const STORAGE_KEY = 'academia_flow_data';
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
 
-const getInitialData = (): AppData => ({
-  users: [],
-  tasks: [],
-  calendar: [],
-  feedback: []
-});
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export const storageService = {
-  getData: (): AppData => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return getInitialData();
-    const parsed = JSON.parse(data);
-    // Ensure feedback array exists for older data
-    if (!parsed.feedback) parsed.feedback = [];
-    return parsed;
-  },
-
-  saveData: (data: AppData): void => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  },
-
-  saveFeedback: (feedback: any): void => {
-    const data = storageService.getData();
-    data.feedback.push(feedback);
-    storageService.saveData(data);
-  },
-
-  getTasksByUserId: (userId: string): Task[] => {
-    const data = storageService.getData();
-    return [...data.tasks.filter(t => t.userId === userId)];
-  },
-
-  saveTask: (task: Task): void => {
-    const data = storageService.getData();
-    const existingIndex = data.tasks.findIndex(t => t.id === task.id);
-    if (existingIndex > -1) {
-      data.tasks[existingIndex] = { ...task };
-    } else {
-      data.tasks.push({ ...task });
+  getUser: async (userId: string): Promise<User | null> => {
+    const path = `users/${userId}`;
+    try {
+      const docRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(docRef);
+      return docSnap.exists() ? docSnap.data() as User : null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+      return null; // Should not reach here as handleFirestoreError throws
     }
-    storageService.saveData(data);
   },
 
-  deleteTask: (taskId: string): void => {
-    const data = storageService.getData();
-    data.tasks = data.tasks.filter(t => t.id !== taskId);
-    data.calendar = data.calendar.filter(e => e.taskId !== taskId);
-    storageService.saveData(data);
+  saveUser: async (user: User): Promise<void> => {
+    const path = `users/${user.id}`;
+    try {
+      await setDoc(doc(db, 'users', user.id), user);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
   },
 
-  getCalendarByUserId: (userId: string): CalendarEvent[] => {
-    const data = storageService.getData();
-    // Corrected: Filter by userId directly
-    return [...data.calendar.filter(e => e.userId === userId)];
+  getTasksByUserId: async (userId: string): Promise<Task[]> => {
+    const path = 'tasks';
+    try {
+      const q = query(collection(db, 'tasks'), where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => doc.data() as Task);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+      return [];
+    }
   },
 
-  saveCalendarEvents: (events: CalendarEvent[], userId: string): void => {
-    const data = storageService.getData();
-    // Corrected: Remove all previous events for THIS user before saving the new set
-    data.calendar = data.calendar.filter(e => e.userId !== userId);
-    data.calendar.push(...events);
-    storageService.saveData(data);
+  saveTask: async (task: Task): Promise<void> => {
+    const path = `tasks/${task.id}`;
+    try {
+      await setDoc(doc(db, 'tasks', task.id), task);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  deleteTask: async (taskId: string): Promise<void> => {
+    const path = `tasks/${taskId}`;
+    try {
+      await deleteDoc(doc(db, 'tasks', taskId));
+      // Also delete associated calendar events
+      const q = query(collection(db, 'calendar'), where('taskId', '==', taskId));
+      const querySnapshot = await getDocs(q);
+      const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, 'calendar', d.id)));
+      await Promise.all(deletePromises);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  getCalendarByUserId: async (userId: string): Promise<CalendarEvent[]> => {
+    const path = 'calendar';
+    try {
+      const q = query(collection(db, 'calendar'), where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => doc.data() as CalendarEvent);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+      return [];
+    }
+  },
+
+  saveCalendarEvents: async (events: CalendarEvent[], userId: string): Promise<void> => {
+    const path = 'calendar';
+    try {
+      const q = query(collection(db, 'calendar'), where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, 'calendar', d.id)));
+      await Promise.all(deletePromises);
+
+      const savePromises = events.map(event => setDoc(doc(db, 'calendar', event.id), event));
+      await Promise.all(savePromises);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  saveFeedback: async (feedback: Feedback): Promise<void> => {
+    const path = `feedback/${feedback.id}`;
+    try {
+      await setDoc(doc(db, 'feedback', feedback.id), feedback);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  wipeAllData: async (): Promise<void> => {
+    try {
+      // This is a dangerous operation, only for admin use during system reset
+      const collections = ['users', 'tasks', 'calendar', 'feedback'];
+      for (const colName of collections) {
+        const querySnapshot = await getDocs(collection(db, colName));
+        const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, colName, d.id)));
+        await Promise.all(deletePromises);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'all_collections');
+    }
+  },
+
+  subscribeToTasks: (userId: string, callback: (tasks: Task[]) => void) => {
+    const path = 'tasks';
+    const q = query(collection(db, 'tasks'), where('userId', '==', userId));
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => doc.data() as Task));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+  },
+
+  subscribeToCalendar: (userId: string, callback: (events: CalendarEvent[]) => void) => {
+    const path = 'calendar';
+    const q = query(collection(db, 'calendar'), where('userId', '==', userId));
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => doc.data() as CalendarEvent));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
   }
 };

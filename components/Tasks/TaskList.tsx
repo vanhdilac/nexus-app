@@ -23,6 +23,19 @@ interface TaskListProps {
   onUserUpdated: (user: User) => void;
 }
 
+const QuestionButton = ({ active, onClick, label }: { active: boolean, onClick: () => void, label: string, key?: string }) => (
+  <button 
+    onClick={onClick}
+    className={`w-full px-6 py-4 rounded-2xl border-2 transition-all text-left font-bold ${
+      active 
+        ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+        : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'
+    }`}
+  >
+    {label}
+  </button>
+);
+
 export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUserUpdated }: TaskListProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -45,29 +58,48 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
 
   const scheduledTaskIds = new Set(calendar.map(e => e.taskId).filter(Boolean));
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const taskData: Task = {
-      id: editingTask ? editingTask.id : crypto.randomUUID(),
-      userId,
-      title,
-      description,
-      deadline,
-      examDate: taskType === 'exam' ? deadline : undefined,
-      difficulty,
-      importance,
-      estimatedHours,
-      isAnalyzed: editingTask ? editingTask.isAnalyzed : false,
-      isCompleted: editingTask ? editingTask.isCompleted : false,
-      completedAt: editingTask ? editingTask.completedAt : undefined,
-      reasoning: editingTask?.reasoning,
-      createdAt: editingTask ? editingTask.createdAt : Date.now()
-    };
-    
-    storageService.saveTask(taskData);
-    onTasksUpdated();
-    closeForm();
+    try {
+      const taskData: any = {
+        id: editingTask ? editingTask.id : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
+        userId,
+        title,
+        description,
+        deadline,
+        difficulty,
+        importance,
+        estimatedHours,
+        isAnalyzed: editingTask ? editingTask.isAnalyzed : false,
+        isCompleted: editingTask ? editingTask.isCompleted : false,
+        createdAt: editingTask ? editingTask.createdAt : Date.now()
+      };
+
+      if (taskType === 'exam') {
+        taskData.examDate = deadline;
+      }
+      
+      if (editingTask?.completedAt !== undefined) {
+        taskData.completedAt = editingTask.completedAt;
+      }
+
+      if (editingTask?.reasoning !== undefined) {
+        taskData.reasoning = editingTask.reasoning;
+      }
+      
+      if (editingTask?.quadrant !== undefined) {
+        taskData.quadrant = editingTask.quadrant;
+      }
+      
+      console.log("Saving task:", taskData);
+      await storageService.saveTask(taskData);
+      onTasksUpdated();
+      closeForm();
+    } catch (err) {
+      console.error("Failed to save task:", err);
+      closeForm();
+    }
   };
 
   const closeForm = () => {
@@ -98,104 +130,85 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     setShowAddForm(true);
   };
 
-  const handleToggleComplete = (task: Task) => {
+  const handleToggleComplete = async (task: Task) => {
     const isNowCompleted = !task.isCompleted;
-    const updates: Partial<Task> = {
-      isCompleted: isNowCompleted,
-      completedAt: isNowCompleted ? Date.now() : undefined
-    };
+    const updatedTask = { ...task, isCompleted: isNowCompleted };
+    if (isNowCompleted) {
+      updatedTask.completedAt = Date.now();
+    } else {
+      // To remove a field in Firestore, we usually set it to deleteField() or just don't include it if using setDoc with merge: false
+      // But here we are using setDoc which overwrites. So we just omit it.
+      delete updatedTask.completedAt;
+    }
 
-    const data = storageService.getData();
-    const taskIndex = data.tasks.findIndex(t => t.id === task.id);
-    if (taskIndex !== -1) {
-      let exp;
+    await storageService.saveTask(updatedTask);
+    
+    const exp = gamificationService.calculateTaskExp(updatedTask);
+    const result = await gamificationService.updateUserProgress(userId, isNowCompleted ? exp : -exp);
+    
+    if (result.user) {
+      onUserUpdated(result.user);
+      
       if (isNowCompleted) {
-        // Calculate after update to get the multiplier for completing
-        data.tasks[taskIndex] = { ...data.tasks[taskIndex], ...updates };
-        exp = gamificationService.calculateTaskExp(data.tasks[taskIndex]);
-      } else {
-        // Calculate before update to get the exact same multiplier that was added
-        exp = gamificationService.calculateTaskExp(data.tasks[taskIndex]);
-        data.tasks[taskIndex] = { ...data.tasks[taskIndex], ...updates };
-      }
-      
-      storageService.saveData(data);
-      const result = gamificationService.updateUserProgress(userId, isNowCompleted ? exp : -exp);
-      
-      if (result.user) {
-        onUserUpdated(result.user);
-        
-        if (isNowCompleted) {
-          const foodGain = Math.floor(exp / 10);
-          // Show Toast
-          setToast({ 
-            message: `+ ${foodGain} Pet food! You're doing great, ${result.user.username}! 🚀`, 
-            type: 'success' 
-          });
-          setTimeout(() => setToast(null), 3000);
+        // Confetti
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#f27024', '#3b82f6', '#10b981']
+        });
 
-          // Confetti
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#f27024', '#3b82f6', '#10b981']
-          });
-
-          if (result.leveledUp) {
-            setTimeout(() => {
-              confetti({
-                particleCount: 200,
-                spread: 100,
-                origin: { y: 0.5 },
-                colors: ['#FFD700', '#f27024']
-              });
-            }, 500);
-          }
-        } else {
-          setToast({ 
-            message: `- ${exp} EXP! I believe in you, don't give up! 💪`, 
-            type: 'info' 
-          });
-          setTimeout(() => setToast(null), 3000);
+        if (result.leveledUp) {
+          setTimeout(() => {
+            confetti({
+              particleCount: 200,
+              spread: 100,
+              origin: { y: 0.5 },
+              colors: ['#FFD700', '#f27024']
+            });
+          }, 500);
         }
       }
-      
-      onTasksUpdated();
     }
+    
+    onTasksUpdated();
   };
 
   const startAnalysis = (task: Task) => {
     setAnalyzingTaskId(task.id);
     setAnalysisStep(1);
+    document.body.style.overflow = 'hidden';
   };
 
   const handleBulkAnalyze = async () => {
     const tasksToAnalyze = tasks.filter(t => selectedTasks.size > 0 ? selectedTasks.has(t.id) : !t.isAnalyzed);
     
     if (tasksToAnalyze.length === 0) {
-      alert("I don't see any tasks waiting for analysis.");
+      setToast({ message: "I don't see any tasks waiting for analysis.", type: 'info' });
+      setTimeout(() => setToast(null), 3000);
       return;
     }
 
     setIsBulkAnalyzing(true);
+    document.body.style.overflow = 'hidden';
     try {
       const results = await geminiService.bulkClassifyTasks(tasksToAnalyze);
       let totalExp = 0;
-      results.forEach(res => {
+      for (const res of results) {
         const task = tasks.find(t => t.id === res.taskId);
         if (task) {
-          storageService.saveTask({
+          const updatedTask = {
             ...task,
             reasoning: res.reasoning,
             isAnalyzed: true
-          });
-          totalExp += gamificationService.calculateTaskExp(task);
+          };
+          await storageService.saveTask(updatedTask);
+          totalExp += gamificationService.calculateTaskExp(updatedTask);
         }
-      });
+      }
       
       if (totalExp > 0) {
-        const result = gamificationService.updateUserProgress(userId, totalExp);
+        const result = await gamificationService.updateUserProgress(userId, totalExp);
         if (result.user) {
           onUserUpdated(result.user);
           if (result.leveledUp) {
@@ -213,9 +226,11 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
       setSelectedTasks(new Set());
     } catch (err) {
       console.error(err);
-      alert("I encountered an error during bulk analysis, please try again.");
+      setToast({ message: "I encountered an error during bulk analysis, please try again.", type: 'info' });
+      setTimeout(() => setToast(null), 3000);
     }
     setIsBulkAnalyzing(false);
+    document.body.style.overflow = 'auto';
   };
 
   const handleAnalysisSubmit = async () => {
@@ -224,15 +239,16 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     if (task) {
       try {
         const result = await geminiService.classifyTask(task, answers);
-        storageService.saveTask({
+        const updatedTask = {
           ...task,
           reasoning: result.reasoning,
           isAnalyzed: true
-        });
+        };
+        await storageService.saveTask(updatedTask);
         
         // Award EXP
-        const expGain = gamificationService.calculateTaskExp(task);
-        const gamificationResult = gamificationService.updateUserProgress(userId, expGain);
+        const expGain = gamificationService.calculateTaskExp(updatedTask);
+        const gamificationResult = await gamificationService.updateUserProgress(userId, expGain);
         if (gamificationResult.user) {
           onUserUpdated(gamificationResult.user);
           if (gamificationResult.leveledUp) {
@@ -249,8 +265,10 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
         setAnalyzingTaskId(null);
         setAnalysisStep(0);
         setAnswers({ urgency: '', importance: '', pressure: '' });
+        document.body.style.overflow = 'auto';
       } catch (err) {
-        alert("I couldn't classify this task, please try again.");
+        setToast({ message: "I couldn't classify this task, please try again.", type: 'info' });
+        setTimeout(() => setToast(null), 3000);
       }
     }
     setIsClassifying(false);
@@ -263,14 +281,24 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     setSelectedTasks(newSet);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want me to delete this study record?")) {
-      storageService.deleteTask(id);
-      onTasksUpdated(); 
-    }
+  const handleDelete = async (id: string) => {
+    await storageService.deleteTask(id);
+    onTasksUpdated(); 
+  };
+
+  const handleOpenAddForm = () => {
+    setShowAddForm(true);
+    document.body.style.overflow = 'hidden';
+  };
+
+  const handleCloseModals = () => {
+    closeForm();
+    setAnalyzingTaskId(null);
+    document.body.style.overflow = 'auto';
   };
 
   return (
+    <>
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -295,7 +323,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             <span>{selectedTasks.size > 0 ? `Process (${selectedTasks.size})` : 'Analyze All Tasks'}</span>
           </button>
           <button 
-            onClick={() => setShowAddForm(true)}
+            onClick={handleOpenAddForm}
             className="bg-accent hover:bg-orange-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-orange-100 flex items-center gap-2 font-black transition-all text-xs uppercase tracking-widest"
           >
             <Plus size={18} />
@@ -405,29 +433,18 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
         )}
       </div>
 
-      <AnimatePresence>
-        {toast && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-            className="fixed bottom-10 right-10 z-[200] bg-slate-900 text-white px-8 py-5 rounded-[2rem] shadow-2xl border border-white/10 flex items-center gap-4"
-          >
-            <div className="p-2 bg-emerald-500 rounded-xl">
-              <Sparkles size={20} className="text-white" />
-            </div>
-            <p className="font-black text-sm tracking-tight">{toast.message}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
+    </div>
+    <AnimatePresence>
         {showAddForm && (
-          <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center">
+          <div 
+            className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={handleCloseModals}
+          >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
               className="bg-white w-full max-w-lg md:rounded-[2.5rem] p-6 md:p-10 shadow-2xl overflow-y-auto max-h-full md:max-h-[90vh] relative no-scrollbar modal-content"
             >
               <div className="flex justify-between items-center mb-10">
@@ -437,7 +454,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                   </h2>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Feeding the AI Matrix</p>
                 </div>
-                <button onClick={closeForm} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <button onClick={handleCloseModals} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                   <X size={24} />
                 </button>
               </div>
@@ -540,10 +557,14 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
       )}
 
       {analyzingTaskId && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center">
+        <div 
+          className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-4"
+          onClick={handleCloseModals}
+        >
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
+            onClick={e => e.stopPropagation()}
             className="bg-white w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden modal-content"
           >
             {isClassifying ? (
@@ -604,18 +625,10 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                     </div>
                   )}
                 </div>
-                <button onClick={() => setAnalyzingTaskId(null)} className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">Exit</button>
+                <button onClick={handleCloseModals} className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">Exit</button>
               </>
             )}
           </motion.div>
         </div>
-      )}
-    </div>
-  );
+  </>);
 }
-
-const QuestionButton = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void, key?: any }) => (
-  <button onClick={onClick} className={`w-full p-6 rounded-2xl border-2 text-left transition-all font-black uppercase text-xs tracking-widest ${active ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 hover:border-slate-200 text-slate-400 bg-white'}`}>
-    {label}
-  </button>
-);

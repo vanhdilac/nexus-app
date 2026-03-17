@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Task, User, EisenhowerQuadrant } from '../types';
 import { taskService } from '../services/taskService';
 import { 
@@ -7,6 +7,7 @@ import {
   GraduationCap, Flame, Star, Sparkles, Clock, Zap, CheckCircle2, PawPrint
 } from 'lucide-react';
 import { gamificationService } from '../services/gamificationService';
+import { geminiService } from '../services/geminiService';
 
 interface DashboardProps {
   tasks: Task[];
@@ -14,7 +15,16 @@ interface DashboardProps {
   onTabChange: (tab: any) => void;
 }
 
+interface Quote {
+  text: string;
+  author: string;
+  timestamp: number;
+}
+
 export default function Dashboard({ tasks, user, onTabChange }: DashboardProps) {
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
+
   const analyzedTasks = tasks.filter(t => t.isAnalyzed);
   const completedTasks = tasks.filter(t => t.isCompleted);
   const urgentTasks = tasks.filter(t => taskService.calculateQuadrant(t) === EisenhowerQuadrant.DO_FIRST && !t.isCompleted);
@@ -31,27 +41,44 @@ export default function Dashboard({ tasks, user, onTabChange }: DashboardProps) 
   
   const completionRate = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
   
-  // Progress bar for the day (simple mock based on completed tasks)
   const dayProgress = tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0;
 
-  const aiInsight = useMemo(() => {
-    if (tasks.length === 0) return "You don't have any tasks yet. Add some so I can help you plan! ✨";
-    
-    if (urgentTasks.length > 0) {
-      return `I see you have ${urgentTasks.length} urgent tasks. Focus on them before it's too late! 🚀`;
-    }
-    
-    if (completionRate > 80) {
-      return "Your performance today is amazing! Take some time to rest and recharge. 🌟";
-    }
-    
-    const hour = new Date().getHours();
-    if (hour >= 14 && hour < 17) {
-      return "It's 'Golden Hour' for focus! This is when your brain works best for tough tasks. 🧠";
-    }
-    
-    return "Try breaking down large tasks into smaller ones. I'm always here to support you! 🤝";
-  }, [tasks.length, urgentTasks.length, completionRate]);
+  useEffect(() => {
+    const fetchQuote = async () => {
+      const storedQuote = localStorage.getItem('nexus_motivational_quote');
+      const now = Date.now();
+      const sixHours = 6 * 60 * 60 * 1000;
+
+      if (storedQuote) {
+        const parsedQuote: Quote = JSON.parse(storedQuote);
+        if (now - parsedQuote.timestamp < sixHours) {
+          setQuote(parsedQuote);
+          return;
+        }
+      }
+
+      setIsGeneratingQuote(true);
+      try {
+        const newQuoteData = await geminiService.generateMotivationalQuote();
+        const newQuote: Quote = {
+          text: newQuoteData.quote,
+          author: newQuoteData.author,
+          timestamp: now
+        };
+        setQuote(newQuote);
+        localStorage.setItem('nexus_motivational_quote', JSON.stringify(newQuote));
+      } catch (error) {
+        console.error("Failed to generate quote:", error);
+        // Fallback quote
+        const fallback = { text: "The secret of getting ahead is getting started.", author: "Mark Twain", timestamp: now };
+        setQuote(fallback);
+      } finally {
+        setIsGeneratingQuote(false);
+      }
+    };
+
+    fetchQuote();
+  }, []);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -96,7 +123,7 @@ export default function Dashboard({ tasks, user, onTabChange }: DashboardProps) 
           </div>
         </div>
 
-        {/* Row 2: AI Insight, Completion Rate, Urgent Tasks */}
+        {/* Row 2: Motivational Quote, Completion Rate, Urgent Tasks */}
         <div className="md:col-span-2 bg-gradient-to-br from-[#3B348B] to-[#2D2769] p-8 rounded-3xl text-white shadow-lg transition-all relative overflow-hidden min-h-[250px] flex flex-col justify-between">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <BrainCircuit size={120} />
@@ -106,15 +133,21 @@ export default function Dashboard({ tasks, user, onTabChange }: DashboardProps) 
               <div className="p-2 bg-white/10 rounded-xl backdrop-blur-md">
                 <Sparkles size={20} className="text-indigo-300" />
               </div>
-              <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-100">AI Daily Insight</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-100">Motivational Quote</h3>
             </div>
-            <p className="text-xl font-medium leading-relaxed mb-6">
-              {aiInsight}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-indigo-300 font-bold relative z-10">
-            <Clock size={14} />
-            <span>Updated 5 mins ago</span>
+            {isGeneratingQuote ? (
+              <div className="animate-pulse space-y-4">
+                <div className="h-6 bg-white/10 rounded w-3/4" />
+                <div className="h-6 bg-white/10 rounded w-1/2" />
+              </div>
+            ) : (
+              <div className="animate-in fade-in duration-700">
+                <p className="text-xl font-medium leading-relaxed mb-2 italic">
+                  "{quote?.text}"
+                </p>
+                <p className="text-sm text-indigo-200 font-bold">— {quote?.author}</p>
+              </div>
+            )}
           </div>
         </div>
 

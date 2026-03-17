@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
 import { authService } from '../../services/authService';
-import { User as UserIcon, Lock, Save, CheckCircle2, AlertCircle, Palette } from 'lucide-react';
+import { User as UserIcon, Lock, Save, CheckCircle2, AlertCircle, Palette, Trash2, RefreshCw } from 'lucide-react';
+import { storageService } from '../../services/storageService';
 
 interface ProfileViewProps {
   user: User;
@@ -43,13 +44,13 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setMessage(null);
 
     try {
-      const updatedUser = authService.updateUser(user.id, {
+      const updatedUser = await authService.updateUser(user.id, {
         username,
         bio,
         avatarColor,
@@ -70,7 +71,7 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
     }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setMessage(null);
@@ -81,16 +82,8 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
       return;
     }
 
-    // In this simple implementation, we don't strictly verify current password 
-    // but we check if it's provided if the user has one.
-    if (user.password && currentPassword !== user.password) {
-        setMessage({ type: 'error', text: 'Incorrect current password.' });
-        setIsSubmitting(false);
-        return;
-    }
-
     try {
-      const updatedUser = authService.updateUser(user.id, {
+      const updatedUser = await authService.updateUser(user.id, {
         password: newPassword
       });
 
@@ -109,6 +102,25 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
       setIsSubmitting(false);
     }
   };
+
+  const handleWipeData = async () => {
+    if (!window.confirm('CRITICAL: This will delete ALL user data, tasks, and calendar events from the entire system. This cannot be undone. Are you absolutely sure?')) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await storageService.wipeAllData();
+      setMessage({ type: 'success', text: 'System reset successful. All data has been wiped.' });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to wipe data. Check permissions.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isAdmin = user.email === 'vietanh.ngotran@gmail.com';
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
