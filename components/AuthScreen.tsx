@@ -51,45 +51,17 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const formattedId = studentId.toUpperCase();
 
     if (!validateStudentId(formattedId)) {
-      setError('Invalid Student ID format. Please use the official format that FPT University provides. (e.g., DE210001).');
+      setError('Invalid Student ID format. Please use the official format (e.g., DE210001).');
       return;
     }
 
     try {
       if (isLogin) {
-        const loginEmail = email || `${formattedId.toLowerCase()}@fpt.edu.vn`;
-        const user = await authService.login(loginEmail, password);
+        const user = await authService.login(formattedId, password);
         if (user) {
           onLogin(user);
         } else {
-          // If login successful but no profile, create one automatically
-          const firebaseUser = auth.currentUser;
-          if (firebaseUser) {
-            const newUser: User = {
-              id: firebaseUser.uid,
-              username: username || firebaseUser.email?.split('@')[0] || 'Student',
-              studentId: formattedId,
-              email: firebaseUser.email || '',
-              exp: 0,
-              level: 1,
-              streak: 0,
-              hasSeenOnboarding: false,
-              createdAt: Date.now(),
-              pet: {
-                name: 'Buddy',
-                level: 0,
-                food: 0,
-                colorTheme: 1,
-                isSleeping: false,
-                lastSleepTime: 0,
-                isHidden: false
-              }
-            };
-            await authService.updateUser(firebaseUser.uid, newUser);
-            onLogin(newUser);
-          } else {
-            setError('Invalid credentials or account not registered.');
-          }
+          setError('Invalid credentials or account not registered.');
         }
       } else {
         // Registration
@@ -108,40 +80,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           if (user) onLogin(user);
         } catch (regErr: any) {
           if (regErr.message?.includes('auth/email-already-in-use')) {
-            // If already registered in Auth but no profile in Firestore
-            const user = await authService.login(email, password);
-            if (user) {
-              onLogin(user);
-            } else {
-              const firebaseUser = auth.currentUser;
-              if (firebaseUser) {
-                // Auto-create profile and go to dashboard
-                const newUser: User = {
-                  id: firebaseUser.uid,
-                  username: username,
-                  studentId: formattedId,
-                  email: firebaseUser.email || '',
-                  exp: 0,
-                  level: 1,
-                  streak: 0,
-                  hasSeenOnboarding: false,
-                  createdAt: Date.now(),
-                  pet: {
-                    name: 'Buddy',
-                    level: 0,
-                    food: 0,
-                    colorTheme: 1,
-                    isSleeping: false,
-                    lastSleepTime: 0,
-                    isHidden: false
-                  }
-                };
-                await authService.updateUser(firebaseUser.uid, newUser);
-                onLogin(newUser);
-              } else {
-                setError('This email is already registered. Please log in.');
-              }
-            }
+            setError('This Student ID is already registered. Please log in.');
           } else {
             throw regErr;
           }
@@ -164,11 +103,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       if (err.message?.includes('auth/operation-not-allowed')) {
         setError('Error: Email/Password sign-in is not enabled in Firebase Console.');
       } else if (err.message?.includes('auth/user-not-found') || err.message?.includes('auth/invalid-credential')) {
-        setError('Invalid credentials. If you are new, please "Create an account" below.');
+        setError('Invalid Student ID or password. If you are new, please "Create an account" below.');
       } else if (err.message?.includes('auth/wrong-password')) {
         setError('Incorrect password. Please try again.');
       } else if (err.message?.includes('auth/email-already-in-use')) {
-        setError('This Email or Student ID is already registered. Please log in.');
+        setError('This Student ID is already registered. Please log in.');
       } else {
         setError('An error occurred: ' + errorMessage);
       }

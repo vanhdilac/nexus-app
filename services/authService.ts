@@ -19,22 +19,26 @@ export const authService = {
     return await storageService.getUser(firebaseUser.uid);
   },
 
-  login: async (email: string, password?: string): Promise<User | null> => {
+  login: async (studentId: string, password?: string): Promise<User | null> => {
     if (!password) return null;
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // Sử dụng định dạng email dựa trên Student ID với đuôi @gmail.com
+    const authEmail = `${studentId.toLowerCase()}@gmail.com`;
+    const userCredential = await signInWithEmailAndPassword(auth, authEmail, password);
     return await storageService.getUser(userCredential.user.uid);
   },
 
   register: async (username: string, studentId: string, email: string, password?: string): Promise<User | null> => {
     if (!password) return null;
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // Sử dụng Student ID để tạo tài khoản Auth với đuôi @gmail.com
+    const authEmail = `${studentId.toLowerCase()}@gmail.com`;
+    const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
     const userId = userCredential.user.uid;
 
     const newUser: User = {
       id: userId,
       username,
       studentId: studentId.toUpperCase(),
-      email,
+      email, // Email thực tế của sinh viên dùng để liên lạc, lưu trong Firestore
       exp: 0,
       level: 1,
       streak: 0,

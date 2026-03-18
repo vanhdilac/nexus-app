@@ -573,7 +573,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                   <div className="w-24 h-24 border-8 border-indigo-100 rounded-full" />
                   <motion.div 
                     animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 1, ease: "linear" as const }}
+                    transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
                     className="absolute inset-0 w-24 h-24 border-8 border-indigo-600 border-t-transparent rounded-full"
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -631,6 +631,6 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
           </motion.div>
         </div>
       )}
-      </>
-    );
+    </>
+  );
 }
