@@ -1,5 +1,5 @@
 
-import { User } from '../types';
+import { User, Rank } from '../types';
 import { storageService } from './storageService';
 import { auth, db } from '../firebase';
 import { 
@@ -31,32 +31,63 @@ export const authService = {
     if (!password) return null;
     // Sử dụng Student ID để tạo tài khoản Auth với đuôi @gmail.com
     const authEmail = `${studentId.toLowerCase()}@gmail.com`;
-    const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
-    const userId = userCredential.user.uid;
+    
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      const userId = userCredential.user.uid;
 
-    const newUser: User = {
-      id: userId,
-      username,
-      studentId: studentId.toUpperCase(),
-      email, // Email thực tế của sinh viên dùng để liên lạc, lưu trong Firestore
-      exp: 0,
-      level: 1,
-      streak: 0,
-      hasSeenOnboarding: false,
-      createdAt: Date.now(),
-      pet: {
-        name: 'Buddy',
-        level: 0,
-        food: 0,
-        colorTheme: 1 as 1 | 2 | 3,
-        isSleeping: false,
-        lastSleepTime: 0,
-        isHidden: false
+      const newUser: User = {
+        id: userId,
+        username,
+        studentId: studentId.toUpperCase(),
+        email, // Email thực tế của sinh viên dùng để liên lạc, lưu trong Firestore
+        exp: 0,
+        level: 1,
+        rank: Rank.UNRANKED,
+        rankExp: 0,
+        streak: 0,
+        hasSeenOnboarding: false,
+        language: 'en',
+        createdAt: Date.now()
+      };
+
+      await storageService.saveUser(newUser);
+      return newUser;
+    } catch (error: any) {
+      // Auto-Heal logic: If Auth exists but Firestore is missing
+      if (error.code === 'auth/email-already-in-use') {
+        try {
+          // Try to sign in to check if it's a "limbo" account
+          const userCredential = await signInWithEmailAndPassword(auth, authEmail, password);
+          const userId = userCredential.user.uid;
+          const existingUser = await storageService.getUser(userId);
+          
+          if (!existingUser) {
+            // Account exists in Auth but NOT in Firestore. Let's recreate it.
+            const recoveredUser: User = {
+              id: userId,
+              username,
+              studentId: studentId.toUpperCase(),
+              email,
+              exp: 0,
+              level: 1,
+              rank: Rank.UNRANKED,
+              rankExp: 0,
+              streak: 0,
+              hasSeenOnboarding: false,
+              language: 'en',
+              createdAt: Date.now()
+            };
+            await storageService.saveUser(recoveredUser);
+            return recoveredUser;
+          }
+        } catch (loginError) {
+          // If login fails (wrong password for existing account), re-throw original error
+          throw error;
+        }
       }
-    };
-
-    await storageService.saveUser(newUser);
-    return newUser;
+      throw error;
+    }
   },
 
   logout: async (): Promise<void> => {
@@ -90,23 +121,15 @@ export const authService = {
     const today = new Date().toISOString().split('T')[0];
     const lastActive = user.lastActiveDate;
 
-    // Ensure pet exists if it doesn't (for existing users)
-    const petUpdate: Partial<User> = !user.pet ? {
-      pet: {
-        name: 'Buddy',
-        level: 0,
-        food: Math.floor((user.exp || 0) / 10), // Convert existing EXP to food
-        colorTheme: 1 as 1 | 2 | 3,
-        isSleeping: false,
-        lastSleepTime: 0,
-        lastPettedTime: Date.now(),
-        isHidden: false
-      }
+    // Ensure rank exists if it doesn't (for existing users)
+    const rankUpdate: Partial<User> = (!user.rank || user.rankExp === undefined) ? {
+      rank: user.rank || Rank.UNRANKED,
+      rankExp: user.rankExp || 0
     } : {};
 
     if (lastActive === today) {
-      if (!user.pet) {
-        return await authService.updateUser(user.id, petUpdate);
+      if (!user.rank || user.rankExp === undefined) {
+        return await authService.updateUser(user.id, rankUpdate);
       }
       return user;
     }
@@ -125,7 +148,7 @@ export const authService = {
     return await authService.updateUser(user.id, { 
       streak: newStreak, 
       lastActiveDate: today,
-      ...petUpdate
+      ...rankUpdate
     });
   }
 };

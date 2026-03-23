@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { User } from '../types';
+import { User, Rank } from '../types';
 import { auth } from '../firebase';
 import { authService } from '../services/authService';
+import { storageService } from '../services/storageService';
 import { ArrowRight, UserCircle, Hash, Lock, AlertCircle, Info } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -49,6 +50,59 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setSuccess('');
 
     const formattedId = studentId.toUpperCase();
+
+    // Hardcoded Admin Check
+    if (isLogin && formattedId === 'AD020107' && password === 'onlyadmin') {
+      try {
+        // Try to login first
+        let adminUser = await authService.login('AD020107', 'onlyadmin');
+        
+        // If login succeeded but user doc not in Firestore, create it
+        if (!adminUser) {
+          const firebaseUser = auth.currentUser;
+          if (firebaseUser) {
+            adminUser = {
+              id: firebaseUser.uid,
+              username: 'System Administrator',
+              studentId: 'AD020107',
+              email: 'admin@nexus.edu.vn',
+              exp: 0,
+              level: 99,
+              rank: Rank.GRANDMASTER,
+              rankExp: 0,
+              streak: 0,
+              hasSeenOnboarding: true,
+              createdAt: Date.now(),
+              avatarColor: '#1e293b',
+              role: 'admin' // Ensure role is set for firestore rules
+            } as User;
+            await storageService.saveUser(adminUser);
+          }
+        }
+
+        if (adminUser) {
+          onLogin(adminUser);
+          return;
+        }
+      } catch (loginErr: any) {
+        // If user not found, register them
+        if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential' || loginErr.message?.includes('auth/user-not-found')) {
+          try {
+            const newAdmin = await authService.register('System Administrator', 'AD020107', 'admin@nexus.edu.vn', 'onlyadmin');
+            if (newAdmin) {
+              // Set role to admin for the new user
+              await storageService.saveUser({ ...newAdmin, role: 'admin' });
+              onLogin({ ...newAdmin, role: 'admin' });
+              return;
+            }
+          } catch (regErr) {
+            console.error("Admin registration failed:", regErr);
+          }
+        } else {
+          console.error("Admin login failed:", loginErr);
+        }
+      }
+    }
 
     if (!validateStudentId(formattedId)) {
       setError('Invalid Student ID format. Please use the official format (e.g., DE210001).');
@@ -156,23 +210,23 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               {resetStep === 'request' && (
                 <>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Forgot Password?</h3>
-                  <p className="text-slate-500 text-sm mb-8">Enter your Student ID to receive a recovery code.</p>
+                  <p className="text-slate-500 text-sm mb-8">Enter your Student ID to receive a recovery link.</p>
                   <form onSubmit={handleRequestReset} className="space-y-5">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Student ID</label>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2 ml-1">Email Address</label>
                       <div className="relative">
-                        <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <Info className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input 
-                          type="text" required
-                          value={studentId} onChange={e => setStudentId(e.target.value)}
-                          className="w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all font-bold text-slate-700 uppercase"
-                          placeholder="e.g. DE210001"
+                          type="email" required
+                          value={email || ''} onChange={e => setEmail(e.target.value)}
+                          className="w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all font-bold text-slate-700"
+                          placeholder="e.g. student@gmail.com"
                         />
                       </div>
                     </div>
                     {error && <p className="text-rose-500 text-xs font-bold">{error}</p>}
                     <button type="submit" className="w-full bg-[#f27024] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-[#d9621e] transition-all uppercase tracking-widest text-xs">
-                      Send Reset Code
+                      Send Reset Link
                     </button>
                   </form>
                 </>
@@ -275,7 +329,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <UserCircle className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('username', username) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
                     <input 
                       type="text" required
-                      value={username} onChange={e => setUsername(e.target.value)}
+                      value={username || ''} onChange={e => setUsername(e.target.value)}
                       onBlur={() => handleBlur('username')}
                       className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('username', username) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
                       placeholder="Enter full name"
@@ -292,7 +346,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                     <Info className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('email', email) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
                     <input 
                       type="email" required
-                      value={email} onChange={e => setEmail(e.target.value)}
+                      value={email || ''} onChange={e => setEmail(e.target.value)}
                       onBlur={() => handleBlur('email')}
                       className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-semibold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('email', email) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
                       placeholder="studentmail@gmail.com"
@@ -308,7 +362,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   <Hash className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('studentId', studentId) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
                   <input 
                     type="text" required
-                    value={studentId} onChange={e => setStudentId(e.target.value)}
+                    value={studentId || ''} onChange={e => setStudentId(e.target.value)}
                     onBlur={() => handleBlur('studentId')}
                     maxLength={8}
                     className={`w-full pl-11 pr-5 py-3.5 rounded-xl bg-white border transition-all font-bold text-slate-700 uppercase placeholder:normal-case placeholder:text-slate-300 ${isFieldInvalid('studentId', studentId) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
@@ -335,7 +389,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 ${isFieldInvalid('password', password) ? 'text-rose-400' : 'text-slate-400'}`} size={18} />
                   <input 
                     type={showPassword ? "text" : "password"} required
-                    value={password} onChange={e => setPassword(e.target.value)}
+                    value={password || ''} onChange={e => setPassword(e.target.value)}
                     onBlur={() => handleBlur('password')}
                     className={`w-full pl-11 pr-12 py-3.5 rounded-xl bg-white border transition-all font-bold text-slate-700 placeholder:text-slate-300 ${isFieldInvalid('password', password) ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent'}`}
                     placeholder="••••••••"

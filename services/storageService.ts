@@ -190,5 +190,59 @@ export const storageService = {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });
+  },
+
+  getAllUsers: async (): Promise<User[]> => {
+    const path = 'users';
+    try {
+      const querySnapshot = await getDocs(collection(db, 'users'));
+      return querySnapshot.docs.map(doc => doc.data() as User);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, path);
+      return [];
+    }
+  },
+
+  deleteUser: async (userId: string): Promise<void> => {
+    const path = `users/${userId}`;
+    try {
+      // 1. Delete user from Firebase Auth via our API
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        const response = await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: userId, idToken })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (errorData.activationUrl) {
+            console.error("CRITICAL: Identity Toolkit API is disabled. Please enable it here:", errorData.activationUrl);
+            throw new Error(`Admin must enable Identity Toolkit API to delete accounts. Visit: ${errorData.activationUrl}`);
+          }
+          console.warn("Could not delete user from Auth (they might not exist or API failed):", errorData.error);
+        } else {
+          console.log(`Successfully deleted user ${userId} from Auth`);
+        }
+      }
+
+      // 2. Delete user doc from Firestore
+      await deleteDoc(doc(db, 'users', userId));
+      
+      // 3. Delete associated data
+      const collections = ['tasks', 'calendar', 'feedback'];
+      for (const colName of collections) {
+        const q = query(collection(db, colName), where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, colName, d.id)));
+        await Promise.all(deletePromises);
+      }
+      
+      console.log(`Successfully deleted all Firestore data for user ${userId}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   }
 };

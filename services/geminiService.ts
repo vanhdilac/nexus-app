@@ -5,7 +5,7 @@ import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
 const ai = new GoogleGenAI({ 
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY 
+  apiKey: (process.env as any).GEMINI_API_KEY 
 });
 // const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 // const aiInstance = new GoogleGenAI({ apiKey: key });

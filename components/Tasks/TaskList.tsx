@@ -158,7 +158,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
           colors: ['#f27024', '#3b82f6', '#10b981']
         });
 
-        if (result.leveledUp) {
+        if (result.leveledUp || result.rankedUp) {
           setTimeout(() => {
             confetti({
               particleCount: 200,
@@ -203,22 +203,6 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             isAnalyzed: true
           };
           await storageService.saveTask(updatedTask);
-          totalExp += gamificationService.calculateTaskExp(updatedTask);
-        }
-      }
-      
-      if (totalExp > 0) {
-        const result = await gamificationService.updateUserProgress(userId, totalExp);
-        if (result.user) {
-          onUserUpdated(result.user);
-          if (result.leveledUp) {
-            confetti({
-              particleCount: 150,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#f27024', '#3b82f6', '#10b981']
-            });
-          }
         }
       }
       
@@ -246,21 +230,6 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
         };
         await storageService.saveTask(updatedTask);
         
-        // Award EXP
-        const expGain = gamificationService.calculateTaskExp(updatedTask);
-        const gamificationResult = await gamificationService.updateUserProgress(userId, expGain);
-        if (gamificationResult.user) {
-          onUserUpdated(gamificationResult.user);
-          if (gamificationResult.leveledUp) {
-            confetti({
-              particleCount: 150,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#f27024', '#3b82f6', '#10b981']
-            });
-          }
-        }
-
         onTasksUpdated();
         setAnalyzingTaskId(null);
         setAnalysisStep(0);
@@ -302,8 +271,8 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Academic Tasks</h1>
-          <p className="text-slate-500 font-medium text-sm">Manage and prioritize your academic workload.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Academic Tasks</h1>
+          <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">Manage and prioritize your academic workload.</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -334,30 +303,30 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
 
       <div className="grid grid-cols-1 gap-4">
         {tasks.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] p-20 text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <ClipboardList className="text-slate-300" size={32} />
+          <div className="bg-white dark:bg-slate-800 border-2 border-dashed border-slate-100 dark:border-slate-700 rounded-[2.5rem] p-20 text-center">
+            <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <ClipboardList className="text-slate-300 dark:text-slate-600" size={32} />
             </div>
-            <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[10px]">The list is empty</p>
+            <p className="text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">The list is empty</p>
           </div>
         ) : (
           tasks.sort((a,b) => b.createdAt - a.createdAt).map(task => {
             const currentQuadrant = taskService.calculateQuadrant(task);
             return (
-              <div key={task.id} className={`bg-white p-6 rounded-[1.5rem] border transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group relative overflow-hidden ${task.isCompleted ? 'border-emerald-100 bg-emerald-50/30 opacity-60' : task.examDate ? 'border-rose-300 ring-4 ring-rose-50' : 'border-slate-100'} ${!task.isAnalyzed && !task.isCompleted ? 'border-indigo-100 bg-indigo-50/10' : ''}`}>
+              <div key={task.id} className={`bg-white dark:bg-slate-800 p-6 rounded-[1.5rem] border transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group relative overflow-hidden ${task.isCompleted ? 'border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-900/10 opacity-60' : task.examDate ? 'border-rose-300 dark:border-rose-900/50 ring-4 ring-rose-50 dark:ring-rose-900/10' : 'border-slate-100 dark:border-slate-700'} ${!task.isAnalyzed && !task.isCompleted ? 'border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/10 dark:bg-indigo-900/5' : ''}`}>
                 
                 <div className="flex items-start gap-5 flex-1">
                   <div className="flex flex-col gap-2 mt-1">
                     <button 
                       onClick={() => handleToggleComplete(task)}
-                      className={`relative p-2 rounded-full transition-all border-2 ${task.isCompleted ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100 scale-110' : 'bg-white border-slate-200 text-slate-200 hover:border-emerald-500 hover:text-emerald-500'}`}
+                      className={`relative p-2 rounded-full transition-all border-2 ${task.isCompleted ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100 dark:shadow-none scale-110' : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-200 dark:text-slate-500 hover:border-emerald-500 hover:text-emerald-500'}`}
                       title={task.isCompleted ? "Mark as Incomplete" : "Mark as Complete"}
                     >
                       <CheckCircle2 size={24} strokeWidth={3} />
                     </button>
                     <button 
                       onClick={() => toggleSelection(task.id)}
-                      className={`p-1 rounded-md transition-colors text-center ${selectedTasks.has(task.id) ? 'text-accent' : 'text-slate-200 hover:text-orange-400'}`}
+                      className={`p-1 rounded-md transition-colors text-center ${selectedTasks.has(task.id) ? 'text-accent' : 'text-slate-200 dark:text-slate-600 hover:text-orange-400'}`}
                       title="Select Task"
                     >
                       {selectedTasks.has(task.id) ? <CheckCircle2 size={16} /> : <Circle size={16} />}
@@ -365,31 +334,33 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                   </div>
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <h3 className={`font-black text-xl tracking-tight transition-all ${task.isCompleted ? 'text-slate-400 line-through decoration-emerald-500 decoration-2' : 'text-slate-800'}`}>{task.title}</h3>
+                      <h3 className={`font-black text-xl tracking-tight transition-all ${task.isCompleted ? 'text-slate-400 dark:text-slate-500 line-through decoration-emerald-500 decoration-2' : 'text-slate-800 dark:text-white'}`}>{task.title}</h3>
                       {scheduledTaskIds.has(task.id) && (
-                        <span className="p-1 bg-emerald-50 text-emerald-600 rounded-md" title="Scheduled in Calendar">
-                          <Calendar size={12} />
+                        <span className="p-1.5 bg-emerald-900 dark:bg-emerald-900/30 text-emerald-300 dark:text-emerald-300 rounded-lg shadow-sm border border-emerald-100 dark:border-emerald-800" title="Scheduled in Calendar">
+                          <Calendar size={14} strokeWidth={2.5} />
                         </span>
                       )}
                       {task.isAnalyzed ? (
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border tracking-tighter ${QUADRANT_COLORS[currentQuadrant]}`}>
+                        <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full border tracking-tighter shadow-sm ${QUADRANT_COLORS[currentQuadrant]}`}>
                           {currentQuadrant}
                         </span>
                       ) : (
-                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-accent border border-orange-200 tracking-tighter">
+                        <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 tracking-tighter shadow-sm">
                           AI Pending
                         </span>
                       )}
-                      <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-50 text-accent flex items-center gap-1 tracking-tighter border border-orange-100"><Hourglass size={10} /> {task.estimatedHours}h Needed</span>
+                      <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center gap-1.5 tracking-tighter border border-orange-100 dark:border-orange-900/30 shadow-sm">
+                        <Hourglass size={12} strokeWidth={2.5} /> {task.estimatedHours}H NEEDED
+                      </span>
                     </div>
-                    <p className="text-slate-500 text-sm font-medium mb-3 break-words whitespace-pre-wrap">{task.description}</p>
-                    <div className="flex items-center gap-4">
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                        <Clock size={12} className="text-indigo-400" />
+                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-3 break-words whitespace-pre-wrap">{task.description}</p>
+                    <div className="flex items-center gap-5">
+                      <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                        <Clock size={14} className="text-indigo-500 dark:text-indigo-400" />
                         Due: {task.deadline}
                       </span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                        <AlertCircle size={12} className="text-indigo-400" />
+                      <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                        <AlertCircle size={14} className="text-indigo-500 dark:text-indigo-400" />
                         {task.difficulty}
                       </span>
                     </div>
@@ -440,39 +411,39 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={handleCloseModals}
           >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white w-full max-w-lg md:rounded-[2.5rem] p-6 md:p-10 shadow-2xl overflow-y-auto max-h-full md:max-h-[90vh] relative no-scrollbar modal-content"
-            >
-              <div className="flex justify-between items-center mb-10">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">
-                    {editingTask ? 'Edit Task' : 'Create Task'}
-                  </h2>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Feeding the AI Matrix</p>
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className="bg-white dark:bg-slate-800 w-full max-w-lg md:rounded-[2.5rem] p-6 md:p-10 shadow-2xl overflow-y-auto max-h-full md:max-h-[90vh] relative no-scrollbar modal-content border border-slate-100 dark:border-slate-700"
+              >
+                <div className="flex justify-between items-center mb-10">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">
+                      {editingTask ? 'Edit Task' : 'Create Task'}
+                    </h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Feeding the AI Matrix</p>
+                  </div>
+                  <button onClick={handleCloseModals} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-400">
+                    <X size={24} />
+                  </button>
                 </div>
-                <button onClick={handleCloseModals} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
               <form onSubmit={handleAddTask} className="space-y-6">
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Title</label>
-                  <input required value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none text-slate-700 font-bold" placeholder="E.g. Discrete Math HW" />
+                  <input required value={title || ''} onChange={e => setTitle(e.target.value)} className="w-full bg-white dark:bg-slate-900 px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 focus:border-indigo-500 outline-none text-slate-700 dark:text-white font-bold" placeholder="E.g. Discrete Math HW" />
                 </div>
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Detail</label>
-                  <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none h-24 text-slate-700 font-bold" placeholder="Context for the AI..." />
+                  <textarea value={description || ''} onChange={e => setDescription(e.target.value)} className="w-full bg-white dark:bg-slate-900 px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 focus:border-indigo-500 outline-none h-24 text-slate-700 dark:text-white font-bold" placeholder="Context for the AI..." />
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1">
-                      <Calendar size={14} color="#000000" strokeWidth={2.5} /> Deadline Date
+                      <Calendar size={14} className="text-slate-900 dark:text-white" strokeWidth={2.5} /> Deadline Date
                     </label>
-                    <input type="date" required value={deadline} onChange={e => setDeadline(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-slate-100 outline-none text-slate-700 font-bold cursor-pointer focus:border-indigo-500" />
+                    <input type="date" required value={deadline || ''} onChange={e => setDeadline(e.target.value)} className="w-full bg-white dark:bg-slate-900 px-5 py-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 outline-none text-slate-700 dark:text-white font-bold cursor-pointer focus:border-indigo-500" />
                   </div>
                   
                   <div className="space-y-2">
@@ -509,18 +480,18 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                       type="number" required min="1" max="100"
                       value={estimatedHours || ''} 
                       onChange={e => setEstimatedHours(e.target.value === '' ? 0 : parseInt(e.target.value))} 
-                      className="w-full bg-white px-5 py-4 rounded-2xl border-2 border-indigo-100 focus:border-indigo-600 outline-none text-slate-800 font-black text-center text-xl" 
+                      className="w-full bg-white dark:bg-slate-900 px-5 py-4 rounded-2xl border-2 border-indigo-100 dark:border-indigo-900 focus:border-indigo-600 outline-none text-slate-800 dark:text-white font-black text-center text-xl" 
                     />
                     <p className="text-[9px] font-bold text-slate-400 text-center">How much time do you need to study each week?</p>
                   </div>
                   <div className="space-y-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Level of Importance</label>
-                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 p-1 rounded-xl">
                       {[TaskImportance.LOW, TaskImportance.MEDIUM, TaskImportance.HIGH].map(imp => (
                         <button 
                           key={imp} type="button"
                           onClick={() => setImportance(imp)}
-                          className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase transition-all ${importance === imp ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                          className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase transition-all ${importance === imp ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-400 dark:text-slate-500'}`}
                         >
                           {imp}
                         </button>
@@ -565,7 +536,7 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             onClick={e => e.stopPropagation()}
-            className="bg-white w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden modal-content"
+            className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-[3rem] p-12 shadow-2xl text-center relative overflow-hidden modal-content border border-slate-100 dark:border-slate-700"
           >
             {isClassifying ? (
               <div className="py-12 flex flex-col items-center">
@@ -595,33 +566,71 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
                   <span className="inline-block px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase mb-8 tracking-widest">Logic Node {analysisStep} / 3</span>
                   {analysisStep === 1 && (
                     <div className="animate-in slide-in-from-right-4">
-                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Criticality?</h2>
+                      <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-6 uppercase tracking-tighter">Criticality?</h2>
                       <div className="space-y-3">
                         {["Immediate (< 48h)", "Weekly Goal", "Long-term"].map(opt => (
-                          <QuestionButton key={opt} active={answers.urgency === opt} onClick={() => { setAnswers({...answers, urgency: opt}); setAnalysisStep(2); }} label={opt} />
+                          <QuestionButton key={opt} active={answers.urgency === opt} onClick={() => { setAnswers({...answers, urgency: opt}); }} label={opt} />
                         ))}
+                      </div>
+                      <div className="mt-8 flex justify-end">
+                        <button 
+                          disabled={!answers.urgency}
+                          onClick={() => setAnalysisStep(2)}
+                          className="px-10 py-4 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-100 disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                        >
+                          Next Step
+                        </button>
                       </div>
                     </div>
                   )}
                   {analysisStep === 2 && (
                     <div className="animate-in slide-in-from-right-4">
-                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Academic Value?</h2>
+                      <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-6 uppercase tracking-tighter">Academic Value?</h2>
                       <div className="space-y-3">
                         {["Critical Grade", "Important Study", "Routine Admin"].map(opt => (
-                          <QuestionButton key={opt} active={answers.importance === opt} onClick={() => { setAnswers({...answers, importance: opt}); setAnalysisStep(3); }} label={opt} />
+                          <QuestionButton key={opt} active={answers.importance === opt} onClick={() => { setAnswers({...answers, importance: opt}); }} label={opt} />
                         ))}
+                      </div>
+                      <div className="mt-8 flex justify-between gap-4">
+                        <button 
+                          onClick={() => setAnalysisStep(1)}
+                          className="px-8 py-4 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-2xl font-black uppercase tracking-widest text-xs transition-all hover:bg-slate-200"
+                        >
+                          Back
+                        </button>
+                        <button 
+                          disabled={!answers.importance}
+                          onClick={() => setAnalysisStep(3)}
+                          className="flex-1 py-4 bg-accent text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-100 disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                        >
+                          Next Step
+                        </button>
                       </div>
                     </div>
                   )}
                   {analysisStep === 3 && (
                     <div className="animate-in slide-in-from-right-4">
-                      <h2 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Mental Bandwidth?</h2>
+                      <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-6 uppercase tracking-tighter">Mental Bandwidth?</h2>
                       <div className="space-y-3">
                         {["Stressed", "Alert", "Stable"].map(opt => (
                           <QuestionButton key={opt} active={answers.pressure === opt} onClick={() => setAnswers({...answers, pressure: opt})} label={opt} />
                         ))}
                       </div>
-                      <button onClick={handleAnalysisSubmit} className="mt-10 w-full nexus-bg-gradient text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-[0.2em] text-xs">Execute Matrix</button>
+                      <div className="mt-8 flex justify-between gap-4">
+                        <button 
+                          onClick={() => setAnalysisStep(2)}
+                          className="px-8 py-4 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-2xl font-black uppercase tracking-widest text-xs transition-all hover:bg-slate-200"
+                        >
+                          Back
+                        </button>
+                        <button 
+                          disabled={!answers.pressure}
+                          onClick={handleAnalysisSubmit} 
+                          className="flex-1 py-5 bg-accent text-white rounded-2xl font-black shadow-xl uppercase tracking-[0.25em] text-xs transition-all hover:scale-105 active:scale-95"
+                        >
+                          Execute Matrix
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

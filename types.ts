@@ -48,6 +48,8 @@ export interface CalendarEvent {
   date: string;      // YYYY-MM-DD (Start date for recurring, or the date for single)
   isCommitment?: boolean;
   isRecurring?: boolean;
+  isCompleted?: boolean;
+  completedAt?: number;
   recurrence?: {
     frequency: 'daily' | 'weekly';
     daysOfWeek?: number[]; // 0-6 (Sun-Sat)
@@ -55,15 +57,16 @@ export interface CalendarEvent {
   };
 }
 
-export interface Pet {
-  name: string;
-  level: number;
-  food: number;
-  colorTheme: 1 | 2 | 3; // 1: Pink, 2: Purple, 3: Orange-Red
-  isSleeping: boolean;
-  lastSleepTime: number;
-  lastPettedTime?: number;
-  isHidden: boolean;
+export enum Rank {
+  UNRANKED = 'Unranked',
+  IRON = 'Iron',
+  BRONZE = 'Bronze',
+  SILVER = 'Silver',
+  GOLD = 'Gold',
+  PLATINUM = 'Platinum',
+  DIAMOND = 'Diamond',
+  MASTER = 'Master',
+  GRANDMASTER = 'Grandmaster'
 }
 
 export interface User {
@@ -76,13 +79,18 @@ export interface User {
   avatarColor?: string;
   themeColor?: string;
   isDarkMode?: boolean;
-  exp: number; // Still used to track total, but will be converted to food
-  level: number; // User level (separate from pet level)
+  language?: 'en' | 'vi';
+  exp: number; // Total EXP
+  level: number; // User level
+  rank: Rank;
+  rankExp: number; // Current EXP in current rank
   streak: number;
   lastActiveDate?: string; // YYYY-MM-DD
   hasSeenOnboarding: boolean;
+  hasBeenReset?: boolean;
+  hasBeenReset_v2?: boolean;
   createdAt: number;
-  pet?: Pet;
+  role?: string;
 }
 
 export interface Feedback {

@@ -17,35 +17,44 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') || 
-         (request.auth.token.email == "vietanh.ngotran@gmail.com" && request.auth.token.email_verified == true));
+         (request.auth.token.email == "vanhdilac@gmail.com" && request.auth.token.email_verified == true) ||
+         (request.auth.token.email == "ad020107@gmail.com"));
     }
 
     // ===============================================================
     // User profiles
     // ===============================================================
     match /users/{userId} {
-      // Allow read/write if authenticated. This is more permissive to help with system resets.
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+    match /users {
+      allow list: if isAdmin();
     }
 
     // ===============================================================
     // Tasks
     // ===============================================================
     match /tasks/{taskId} {
-      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow read, list: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
       allow delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+    }
+    match /tasks {
+      allow list: if isAdmin();
     }
 
     // ===============================================================
     // Calendar Events
     // ===============================================================
     match /calendar/{eventId} {
-      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow read, list: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
       allow delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+    }
+    match /calendar {
+      allow list: if isAdmin();
     }
 
     // ===============================================================

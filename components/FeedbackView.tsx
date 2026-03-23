@@ -119,7 +119,7 @@ export default function FeedbackView({ user }: FeedbackViewProps) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Share your thoughts with us..."
-            className="w-full h-40 p-5 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white transition-all text-slate-700 font-medium"
+            className="w-full h-40 p-5 rounded-2xl bg-white border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-accent transition-all text-black font-bold shadow-sm"
           />
         </div>
 

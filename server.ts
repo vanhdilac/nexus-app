@@ -3,14 +3,75 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
+
+// Initialize Firebase Admin
+const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+if (fs.existsSync(configPath)) {
+  const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  if (firebaseConfig.projectId) {
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+    console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
+  }
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // API Route for deleting a user (Admin only)
+  app.post("/api/admin/delete-user", async (req, res) => {
+    const { uid, idToken } = req.body;
+
+    if (!uid || !idToken) {
+      return res.status(400).json({ error: "UID and ID Token are required" });
+    }
+
+    try {
+      // Verify the ID Token to ensure the requester is an admin
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const adminEmail = decodedToken.email;
+      
+      // Check if the user is an admin (using the same logic as firestore.rules)
+      const isAdmin = adminEmail === "vanhdilac@gmail.com" || 
+                      adminEmail === "ad020107@gmail.com" ||
+                      adminEmail === "vietanh.ngotran@gmail.com";
+
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Unauthorized: Admin privileges required" });
+      }
+
+      // Delete the user from Firebase Auth
+      await admin.auth().deleteUser(uid);
+      console.log(`Successfully deleted user ${uid} from Firebase Auth`);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting user from Auth:", error);
+      
+      // Check for disabled Identity Toolkit API
+      if (error.message?.includes('identitytoolkit.googleapis.com') || error.code === 'auth/internal-error') {
+        const projectId = admin.app().options.projectId;
+        const activationUrl = `https://console.developers.google.com/apis/api/identitytoolkit.googleapis.com/overview?project=${projectId}`;
+        
+        return res.status(500).json({ 
+          error: "Identity Toolkit API is disabled. Admin must enable it to delete accounts.",
+          activationUrl: activationUrl,
+          instruction: "Please visit the activation URL and click 'ENABLE' to allow account deletion."
+        });
+      }
+
+      res.status(500).json({ error: error.message || "Failed to delete user from Auth" });
+    }
+  });
 
   // API Route for sending reset code
   app.post("/api/send-reset-code", async (req, res) => {

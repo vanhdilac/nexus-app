@@ -21,16 +21,24 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+input, textarea, select {
+  color: #000000 !important;
+}
+
+.dark input, .dark textarea, .dark select {
+  color: #ffffff !important;
+}
+
 .bg-white {
-  background-color: var(--card-bg) !important;
+  background-color: var(--card-bg);
 }
 
 .border-slate-200, .border-slate-100, .border-transparent {
-  border-color: var(--card-border) !important;
+  border-color: var(--card-border);
 }
 
 .text-slate-900, .text-slate-800 {
-  color: var(--text-main) !important;
+  color: var(--text-main);
 }
 
 .text-slate-500, .text-slate-400 {
@@ -44,6 +52,10 @@ body {
 
 .text-accent {
   color: var(--accent) !important;
+}
+
+.text-white {
+  color: #ffffff !important;
 }
 
 .bg-accent {

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Task, CalendarEvent } from './types';
+import { User, Task, CalendarEvent, Rank } from './types';
 import { storageService } from './services/storageService';
 import { authService } from './services/authService';
 import { auth } from './firebase';
@@ -12,14 +12,16 @@ import MatrixView from './components/Matrix/MatrixView';
 import CalendarView from './components/Calendar/CalendarView';
 import ProfileView from './components/Profile/ProfileView';
 import FeedbackView from './components/FeedbackView';
-import PetView from './components/Pet/PetView';
-import PetOverlay from './components/Pet/PetOverlay';
+import RankedView from './components/Ranked/RankedView';
+import LeaderboardView from './components/Leaderboard/LeaderboardView';
+import { AdminView } from './components/Admin/AdminView';
 import OnboardingModal from './components/OnboardingModal';
 import UpcomingExams from './components/UpcomingExams';
 import Footer from './components/Footer';
-import { Activity, ClipboardList, LayoutGrid, Calendar, LogOut, MapPin, MessageSquare, BookOpen, Menu, X as CloseIcon, PawPrint } from 'lucide-react';
+import { Activity, ClipboardList, LayoutGrid, Calendar, LogOut, MapPin, MessageSquare, BookOpen, Menu, X as CloseIcon, Shield, Timer, Moon, Sun, Trophy, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import NexusLogo from './components/NexusLogo';
+import PomodoroView from './components/Pomodoro/PomodoroView';
 
 import { notificationService } from './services/notificationService';
 
@@ -27,7 +29,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [calendar, setCalendar] = useState<CalendarEvent[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'matrix' | 'calendar' | 'profile' | 'feedback' | 'pet'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'matrix' | 'calendar' | 'profile' | 'feedback' | 'pomodoro' | 'ranked' | 'leaderboard' | 'admin'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
@@ -61,8 +63,20 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userData = await storageService.getUser(firebaseUser.uid);
+        let userData = await storageService.getUser(firebaseUser.uid);
         if (userData) {
+          // Force reset to 0 as requested by user (v2)
+          if (!userData.hasBeenReset_v2) {
+            userData = {
+              ...userData,
+              exp: 0,
+              rankExp: 0,
+              level: 1,
+              rank: Rank.UNRANKED,
+              hasBeenReset_v2: true
+            };
+            await storageService.saveUser(userData);
+          }
           const updatedUser = await authService.checkAndUpdateStreak(userData);
           const finalUser = updatedUser || userData;
           setUser(finalUser);
@@ -208,6 +222,10 @@ export default function App() {
   }
 
   const renderContent = () => {
+    if (user?.studentId === 'AD020107') {
+      return <AdminView currentUser={user} />;
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
@@ -221,8 +239,14 @@ export default function App() {
         return <ProfileView user={user} onUserUpdated={(updatedUser) => setUser(updatedUser)} />;
       case 'feedback':
         return <FeedbackView user={user} />;
-      case 'pet':
-        return <PetView user={user} onUserUpdated={(u) => setUser(u)} />;
+      case 'pomodoro':
+        return <PomodoroView user={user} onUserUpdated={(u) => setUser(u)} />;
+      case 'ranked':
+        return <RankedView user={user} onUserUpdated={(u) => setUser(u)} />;
+      case 'leaderboard':
+        return <LeaderboardView currentUser={user} />;
+      case 'admin':
+        return <AdminView currentUser={user} />;
       default:
         return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
     }
@@ -277,14 +301,22 @@ export default function App() {
 
 
         <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-          <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} collapsed={isSidebarCollapsed} specialIconColor="text-white" />
-          <NavItem icon={<PawPrint size={20}/>} label="Pet" active={activeTab === 'pet'} onClick={() => setActiveTab('pet')} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} collapsed={isSidebarCollapsed} />
-          
-          {!isSidebarCollapsed && <UpcomingExams tasks={tasks} />}
+          {user.studentId === 'AD020107' ? (
+            <NavItem icon={<Users size={20}/>} label="Accounts" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={isSidebarCollapsed} />
+          ) : (
+            <>
+              <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} collapsed={isSidebarCollapsed} specialIconColor="text-white" />
+              <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => setActiveTab('pomodoro')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => setActiveTab('ranked')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')} collapsed={isSidebarCollapsed} />
+              <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} collapsed={isSidebarCollapsed} />
+              
+              {!isSidebarCollapsed && <UpcomingExams tasks={tasks} />}
+            </>
+          )}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-100">
@@ -292,8 +324,8 @@ export default function App() {
             onClick={() => setActiveTab('profile')}
             className={`flex items-center gap-3 mb-6 p-2 w-full rounded-2xl border transition-all text-left ${
               activeTab === 'profile' 
-                ? 'bg-slate-100 border-slate-200 ring-2 ring-slate-200' 
-                : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+                ? 'bg-slate-200 dark:bg-slate-900 border-slate-300 dark:border-slate-800 ring-2 ring-slate-300 dark:ring-slate-800' 
+                : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
             } ${isSidebarCollapsed ? 'justify-center' : ''}`}
           >
             <div 
@@ -304,14 +336,14 @@ export default function App() {
             </div>
             {!isSidebarCollapsed && (
               <div className="overflow-hidden">
-                <p className="font-bold text-slate-800 truncate text-sm">{user.username}</p>
-                <p className="text-[10px] font-black text-slate-400 truncate uppercase tracking-tighter">{user.studentId}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-50 truncate text-sm">{user.username}</p>
+                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 truncate uppercase tracking-tighter">{user.studentId}</p>
               </div>
             )}
           </button>
           <button 
             onClick={handleLogout}
-            className={`flex items-center gap-2 text-slate-400 hover:text-rose-600 transition-colors w-full text-left px-4 py-3 hover:bg-rose-50 rounded-xl font-bold text-sm ${isSidebarCollapsed ? 'justify-center' : ''}`}
+            className={`flex items-center gap-2 text-slate-400 hover:text-rose-600 transition-colors w-full text-left px-4 py-3 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl font-bold text-sm ${isSidebarCollapsed ? 'justify-center' : ''}`}
           >
             <LogOut size={18} />
             {!isSidebarCollapsed && <span>Sign out</span>}
@@ -377,14 +409,22 @@ export default function App() {
               </div>
               
               <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-                <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsMenuOpen(false); }} />
-                <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => { setActiveTab('tasks'); setIsMenuOpen(false); }} />
-                <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => { setActiveTab('matrix'); setIsMenuOpen(false); }} />
-                <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setIsMenuOpen(false); }} specialIconColor="text-black" />
-                <NavItem icon={<PawPrint size={20}/>} label="Pet" active={activeTab === 'pet'} onClick={() => { setActiveTab('pet'); setIsMenuOpen(false); }} />
-                <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => { setActiveTab('feedback'); setIsMenuOpen(false); }} />
-                
-                <UpcomingExams tasks={tasks} />
+                {user.studentId === 'AD020107' ? (
+                  <NavItem icon={<Users size={20}/>} label="Accounts" active={activeTab === 'admin'} onClick={() => { setActiveTab('admin'); setIsMenuOpen(false); }} />
+                ) : (
+                  <>
+                    <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => { setActiveTab('tasks'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => { setActiveTab('matrix'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setIsMenuOpen(false); }} specialIconColor="text-black" />
+                    <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => { setActiveTab('pomodoro'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => { setActiveTab('ranked'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => { setActiveTab('leaderboard'); setIsMenuOpen(false); }} />
+                    <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => { setActiveTab('feedback'); setIsMenuOpen(false); }} />
+                    
+                    <UpcomingExams tasks={tasks} />
+                  </>
+                )}
               </nav>
 
               <div className="mt-auto pt-6 border-t border-slate-100">
@@ -392,8 +432,8 @@ export default function App() {
                   onClick={() => { setActiveTab('profile'); setIsMenuOpen(false); }}
                   className={`flex items-center gap-3 mb-6 p-2 w-full rounded-2xl border transition-all text-left ${
                     activeTab === 'profile' 
-                      ? 'bg-slate-100 border-slate-200 ring-2 ring-slate-200' 
-                      : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+                      ? 'bg-slate-200 dark:bg-slate-900 border-slate-300 dark:border-slate-800 ring-2 ring-slate-300 dark:ring-slate-800' 
+                      : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   <div 
@@ -403,13 +443,13 @@ export default function App() {
                     {user.username[0].toUpperCase()}
                   </div>
                   <div className="overflow-hidden">
-                    <p className="font-bold text-slate-800 truncate text-sm">{user.username}</p>
-                    <p className="text-[10px] font-black text-slate-400 truncate uppercase tracking-tighter">{user.studentId}</p>
+                    <p className="font-bold text-slate-900 dark:text-slate-50 truncate text-sm">{user.username}</p>
+                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 truncate uppercase tracking-tighter">{user.studentId}</p>
                   </div>
                 </button>
                 <button 
                   onClick={handleLogout}
-                  className="flex items-center gap-2 text-slate-400 hover:text-rose-600 transition-colors w-full text-left px-4 py-3 hover:bg-rose-50 rounded-xl font-bold text-sm"
+                  className="flex items-center gap-2 text-slate-400 hover:text-rose-600 transition-colors w-full text-left px-4 py-3 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl font-bold text-sm"
                 >
                   <LogOut size={18} />
                   <span>Sign out</span>
@@ -432,35 +472,40 @@ export default function App() {
         <Footer />
       </div>
 
-      <PetOverlay user={user} onUserUpdated={(u) => setUser(u)} />
-
       <OnboardingModal 
         isOpen={showOnboarding} 
         onClose={handleCloseOnboarding} 
       />
 
-      {/* Notification Modal (Simulated Email) - REMOVED AS REQUESTED */}
-
-      {/* Floating Help Button */}
-      <button
-        onClick={() => setShowOnboarding(true)}
-        className="fixed bottom-24 md:bottom-8 right-8 z-[100] p-4 bg-white text-[#f27024] rounded-full shadow-2xl border border-slate-100 hover:scale-110 active:scale-95 transition-all group flex items-center gap-2"
-        title="Show User Guide"
-      >
-        <div className="bg-orange-100 p-1.5 rounded-lg group-hover:bg-orange-200 transition-colors">
-          <BookOpen size={20} />
-        </div>
-        <span className="hidden md:block font-bold text-xs uppercase tracking-widest pr-2">Guide</span>
-      </button>
+      {/* Floating Buttons Container */}
+      <div className="fixed bottom-24 md:bottom-8 right-8 z-[100] flex items-center gap-[10px]">
+        {/* Floating Help Button */}
+        {user.studentId !== 'AD020107' && (
+          <button
+            onClick={() => setShowOnboarding(true)}
+            className="p-4 bg-white dark:bg-slate-800 text-[#f27024] rounded-full shadow-2xl border border-slate-100 dark:border-slate-700 hover:scale-110 active:scale-95 transition-all group flex items-center gap-2"
+            title="Show User Guide"
+          >
+            <div className="bg-orange-500 p-1.5 rounded-lg shadow-lg shadow-orange-500/30 transition-colors">
+              <BookOpen size={20} className="text-white" />
+            </div>
+            <span className="hidden md:block font-bold text-xs uppercase tracking-widest pr-2">{user.language === 'vi' ? 'Hướng dẫn' : 'Guide'}</span>
+          </button>
+        )}
+      </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-effect border-t border-slate-200 px-6 py-4 flex justify-between items-center z-[100]">
-        <MobileNavItem icon={<Activity size={24}/>} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-        <MobileNavItem icon={<ClipboardList size={24}/>} active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
-        <MobileNavItem icon={<LayoutGrid size={24}/>} active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} />
-        <MobileNavItem icon={<PawPrint size={24}/>} active={activeTab === 'pet'} onClick={() => setActiveTab('pet')} />
-        <MobileNavItem icon={<Calendar size={24}/>} active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
-      </nav>
+      {user.studentId !== 'AD020107' && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-effect border-t border-slate-200 px-6 py-4 flex justify-between items-center z-[100]">
+          <MobileNavItem icon={<Activity size={24}/>} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <MobileNavItem icon={<ClipboardList size={24}/>} active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
+          <MobileNavItem icon={<LayoutGrid size={24}/>} active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} />
+          <MobileNavItem icon={<Timer size={24}/>} active={activeTab === 'pomodoro'} onClick={() => setActiveTab('pomodoro')} />
+          <MobileNavItem icon={<Shield size={24}/>} active={activeTab === 'ranked'} onClick={() => setActiveTab('ranked')} />
+          <MobileNavItem icon={<Trophy size={24}/>} active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')} />
+          <MobileNavItem icon={<Calendar size={24}/>} active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
+        </nav>
+      )}
     </div>
   );
 }
@@ -471,7 +516,7 @@ const NavItem = ({ icon, label, active, onClick, specialIconColor, collapsed }: 
     className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl transition-all duration-200 font-bold ${
       active 
         ? 'bg-accent text-white shadow-xl shadow-indigo-100' 
-        : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
+        : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-200'
     } ${collapsed ? 'justify-center' : ''}`}
     title={collapsed ? label : ''}
   >

@@ -1,9 +1,8 @@
-
-import React from 'react';
-import { Task, EisenhowerQuadrant, TaskImportance } from '../../types';
+import React, { useRef } from 'react';
+import { Task, EisenhowerQuadrant } from '../../types';
 import { taskService } from '../../services/taskService';
-import { QUADRANT_COLORS } from '../../constants';
-import { Info, HelpCircle, Brain, Sparkles, AlertCircle, GripVertical } from 'lucide-react';
+import { QUADRANT_CONFIG } from '../../constants';
+import { GripVertical } from 'lucide-react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -12,8 +11,7 @@ import {
   DragEndEvent,
   PointerSensor,
   useSensor,
-  useSensors,
-  defaultDropAnimationSideEffects
+  useSensors
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -24,6 +22,8 @@ interface MatrixViewProps {
 
 export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  // Ref để theo dõi 4 ô quadrant
+  const quadrantRefs = useRef<{ [key in EisenhowerQuadrant]?: HTMLDivElement | null }>({});
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -46,14 +46,26 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
     const { active, over } = event;
     setActiveId(null);
 
-    if (over && active.id !== over.id) {
+    if (over) {
       const taskId = active.id as string;
       const newQuadrant = over.id as EisenhowerQuadrant;
       
+      // 1. Cập nhật dữ liệu
       onUpdateTask(taskId, { 
         manualQuadrant: newQuadrant,
         isAnalyzed: true
       });
+
+      // 2. Scroll đến ô mới và căn giữa màn hình
+      setTimeout(() => {
+        const targetElement = quadrantRefs.current[newQuadrant];
+        if (targetElement) {
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }, 50);
     }
   };
 
@@ -73,130 +85,103 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
           </div>
         </div>
 
-        {/* GLOBAL INBOX */}
+        {/* BOX CHỨA TASK CHƯA PHÂN LOẠI */}
         {unanalyzedTasks.length > 0 && (
-          <div className="bg-accent rounded-[3rem] p-10 shadow-2xl shadow-orange-100 animate-in zoom-in-95 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-10 opacity-10">
-              <Sparkles size={120} />
-            </div>
-            <div className="flex items-center gap-4 mb-8 relative z-10">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
-                <HelpCircle size={28} />
-              </div>
-              <div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Unprioritized Tasks</h3>
-                <p className="text-indigo-100 text-sm font-bold opacity-80">{unanalyzedTasks.length} tasks waiting for AI analysis</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-              {unanalyzedTasks.map(task => (
-                <DraggableTask key={task.id} task={task} />
-              ))}
-            </div>
+          <div className="bg-slate-50 rounded-[3rem] p-10 border-2 border-dashed border-slate-200">
+             <div className="flex flex-wrap gap-4">
+                {unanalyzedTasks.map(task => (
+                  <DraggableTask key={task.id} task={task} />
+                ))}
+             </div>
           </div>
         )}
 
-        {/* THE EISENHOWER GRID */}
+        {/* 4 Ô MA TRẬN */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Quadrant 
-            id={EisenhowerQuadrant.DO_FIRST}
-            title="Do First" 
-            subtitle="Urgent & Important" 
-            tasks={getTasksByQuadrant(EisenhowerQuadrant.DO_FIRST)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.DO_FIRST]} 
-          />
-          <Quadrant 
-            id={EisenhowerQuadrant.SCHEDULE}
-            title="Schedule" 
-            subtitle="Important, Not Urgent" 
-            tasks={getTasksByQuadrant(EisenhowerQuadrant.SCHEDULE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.SCHEDULE]} 
-          />
-          <Quadrant 
-            id={EisenhowerQuadrant.DELEGATE}
-            title="Delegate" 
-            subtitle="Urgent, Not Important" 
-            tasks={getTasksByQuadrant(EisenhowerQuadrant.DELEGATE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.DELEGATE]} 
-          />
-          <Quadrant 
-            id={EisenhowerQuadrant.ELIMINATE}
-            title="Eliminate" 
-            subtitle="Neither Urgent Nor Important" 
-            tasks={getTasksByQuadrant(EisenhowerQuadrant.ELIMINATE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.ELIMINATE]} 
-          />
+          {[
+            EisenhowerQuadrant.DO_FIRST,
+            EisenhowerQuadrant.SCHEDULE,
+            EisenhowerQuadrant.DELEGATE,
+            EisenhowerQuadrant.ELIMINATE
+          ].map((q) => (
+            <Quadrant 
+              key={q} 
+              id={q} 
+              tasks={getTasksByQuadrant(q)}
+              // Gán ref cho từng quadrant
+              ref={(el) => { quadrantRefs.current[q] = el; }}
+            />
+          ))}
         </div>
-
-        <DragOverlay dropAnimation={{
-          sideEffects: defaultDropAnimationSideEffects({
-            styles: {
-              active: {
-                opacity: '0.5',
-              },
-            },
-          }),
-        }}>
-          {activeTask ? (
-            <div className="bg-white rounded-2xl p-5 shadow-2xl border-2 border-accent w-72 rotate-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800 text-sm truncate">{activeTask.title}</span>
-                <GripVertical size={16} className="text-accent" />
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-
-        {tasks.length === 0 && (
-          <div className="py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-             <h3 className="text-xl font-bold text-slate-800">Your Matrix is Empty</h3>
-             <p className="text-slate-500 mt-2">Go to "Academic Tasks" to start building your academic nexus.</p>
-          </div>
-        )}
       </div>
+
+      {/* Overlay khi đang kéo - Tắt animation drop để không bị giật ngược */}
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-5 shadow-xl border-2 border-primary/20 w-[280px]">
+            <div className="flex items-center gap-3">
+              <GripVertical size={14} className="text-slate-400" />
+              <span className="font-bold text-slate-900 truncate">{activeTask.title}</span>
+            </div>
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }
 
-const Quadrant = ({ id, title, subtitle, tasks, colorClass }: { id: string, title: string, subtitle: string, tasks: Task[], colorClass: string }) => {
-  const { isOver, setNodeRef } = useDroppable({
-    id: id,
-  });
+const Quadrant = React.forwardRef<HTMLDivElement, { id: EisenhowerQuadrant; tasks: Task[] }>(
+  ({ id, tasks }, ref) => {
+    const { isOver, setNodeRef } = useDroppable({ id });
+    const config = QUADRANT_CONFIG[id];
+    const Icon = config.icon;
 
-  return (
-    <div 
-      ref={setNodeRef}
-      className={`flex flex-col rounded-[3rem] p-10 border-2 min-h-[450px] transition-all relative overflow-hidden shadow-sm ${colorClass} ${isOver ? 'ring-4 ring-current ring-offset-4 scale-[1.02] z-20' : ''}`}
-    >
-      <div className="mb-10 relative z-10">
-        <h3 className="text-3xl font-black uppercase tracking-tighter mb-1">{title}</h3>
-        <p className="text-[11px] opacity-70 font-black tracking-widest uppercase">{subtitle}</p>
-      </div>
-      
-      <div className="flex-1 space-y-4 relative z-10">
-        {tasks.length > 0 ? (
-          tasks.map(task => (
-            <DraggableTask key={task.id} task={task} />
-          ))
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-current rounded-[2.5rem] py-12">
-            <span className="text-[10px] font-black uppercase tracking-widest">Empty Sector</span>
+    return (
+      <div 
+        ref={(node) => {
+          setNodeRef(node);
+          if (typeof ref === 'function') ref(node);
+          else if (ref) (ref as any).current = node;
+        }}
+        className={`rounded-[3.5rem] p-10 transition-all duration-300 border-4 min-h-[400px] flex flex-col ${
+          isOver 
+            ? `${config.bg} ${config.border} scale-[1.02] shadow-2xl` 
+            : `bg-white border-slate-100`
+        }`}
+      >
+        <div className={`flex items-center gap-4 mb-8 ${config.text}`}>
+          <div className={`p-4 rounded-[1.5rem] ${config.bg} shadow-sm`}>
+            <Icon size={24} />
           </div>
-        )}
-      </div>
-    </div>
-  );
-};
+          <div>
+            <h3 className="text-2xl font-black uppercase tracking-tighter">{config.title}</h3>
+            <p className="text-[10px] font-bold opacity-60 uppercase tracking-[0.2em]">{config.subtitle}</p>
+          </div>
+        </div>
 
-const DraggableTask = ({ task }: { task: Task, key?: string }) => {
-  const [hovered, setHovered] = React.useState(false);
+        <div className="flex-1 flex flex-wrap gap-4 content-start">
+          {tasks.map((task) => (
+            <DraggableTask key={task.id} task={task} />
+          ))}
+          {tasks.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-current rounded-[2.5rem] py-12 w-full">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Empty Sector</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+);
+
+const DraggableTask = ({ task }: { task: Task }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
 
   const style = {
     transform: CSS.Translate.toString(transform),
+    // Khi đang kéo, ẩn task ở vị trí cũ hoàn toàn (xóa bóng ma)
     opacity: isDragging ? 0 : 1,
   };
 
@@ -206,14 +191,12 @@ const DraggableTask = ({ task }: { task: Task, key?: string }) => {
       style={style}
       {...attributes}
       {...listeners}
-      className="bg-white/95 backdrop-blur rounded-2xl p-5 shadow-sm relative group cursor-grab active:cursor-grabbing border border-transparent hover:border-current/30 transition-all hover:-translate-y-0.5"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="bg-white/95 backdrop-blur rounded-2xl p-5 shadow-sm relative group cursor-grab active:cursor-grabbing border border-slate-100 hover:border-current/30 transition-all w-[280px]"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 overflow-hidden">
-          <GripVertical size={14} className="text-slate-300 group-hover:text-slate-400 shrink-0" />
-          <span className="font-bold text-slate-800 text-sm truncate">{task.title}</span>
+          <GripVertical size={14} className="text-slate-300 group-hover:text-current shrink-0" />
+          <span className="font-bold text-slate-900 truncate text-sm">{task.title}</span>
         </div>
       </div>
     </div>

@@ -341,8 +341,53 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
               colors: ['#f27024', '#3b82f6', '#10b981']
             });
           }
+          if (result.leveledUp || result.rankedUp) {
+            setTimeout(() => {
+              confetti({
+                particleCount: 200,
+                spread: 100,
+                origin: { y: 0.5 },
+                colors: ['#FFD700', '#f27024']
+              });
+            }, 500);
+          }
         }
         onTasksUpdated();
+      }
+    } else if (movingEvent.isCommitment) {
+      // Handle commitment completion
+      if (movingEvent.isCompleted !== moveIsCompleted) {
+        const [sh, sm] = movingEvent.startTime.split(':').map(Number);
+        const [eh, em] = movingEvent.endTime.split(':').map(Number);
+        const durationHours = (eh - sh) + (em - sm) / 60;
+        const expGain = Math.floor(durationHours * 100);
+        
+        const result = await gamificationService.updateUserProgress(userId, moveIsCompleted ? expGain : -expGain);
+        
+        if (result.user) {
+          onUserUpdated(result.user);
+          if (moveIsCompleted) {
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#f27024', '#3b82f6', '#10b981']
+            });
+          }
+        }
+        
+        // Update the event in the list
+        const updatedWithCompletion = updated.map(evt => {
+          if (evt.id === movingEvent.id) {
+            return { ...evt, isCompleted: moveIsCompleted, completedAt: moveIsCompleted ? Date.now() : undefined };
+          }
+          return evt;
+        });
+        storageService.saveCalendarEvents(updatedWithCompletion, userId);
+        onCalendarUpdated();
+        setMovingEvent(null);
+        document.body.style.overflow = 'auto';
+        return;
       }
     }
 
@@ -376,24 +421,24 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
   const getEventColor = (evt: CalendarEvent) => {
     if (evt.isCommitment) {
       return evt.isRecurring 
-        ? 'bg-slate-100 border-slate-200 text-slate-500' 
-        : 'bg-slate-50 border-slate-200 text-slate-600';
+        ? 'bg-slate-100 border-slate-200 text-slate-900' 
+        : 'bg-slate-50 border-slate-200 text-slate-900';
     }
     
     const task = tasks.find(t => t.id === evt.taskId);
-    if (!task) return 'bg-indigo-50 border-indigo-200 text-indigo-700';
+    if (!task) return 'bg-indigo-50 border-indigo-200 text-slate-900';
 
     switch (task.quadrant) {
       case EisenhowerQuadrant.DO_FIRST:
-        return 'bg-rose-50 border-rose-200 text-rose-700';
+        return 'bg-rose-50 border-rose-200 text-slate-900';
       case EisenhowerQuadrant.SCHEDULE:
-        return 'bg-blue-50 border-blue-200 text-blue-700';
+        return 'bg-blue-50 border-blue-200 text-slate-900';
       case EisenhowerQuadrant.DELEGATE:
-        return 'bg-amber-50 border-amber-200 text-amber-700';
+        return 'bg-amber-50 border-amber-200 text-slate-900';
       case EisenhowerQuadrant.ELIMINATE:
-        return 'bg-slate-100 border-slate-300 text-slate-600';
+        return 'bg-slate-100 border-slate-300 text-slate-900';
       default:
-        return 'bg-indigo-50 border-indigo-200 text-indigo-700';
+        return 'bg-indigo-50 border-indigo-200 text-slate-900';
     }
   };
 
@@ -459,26 +504,26 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
       <div className="flex flex-col gap-6">
         {/* Task Inbox Header (Collapsible) */}
-        <div className="bg-white rounded-[2rem] border border-slate-200 p-4 shadow-sm transition-all duration-300">
+        <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 p-4 shadow-sm transition-all duration-300">
           <div 
             className="flex items-center justify-between cursor-pointer group"
             onClick={() => setIsInboxExpanded(!isInboxExpanded)}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shadow-sm group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm group-hover:scale-110 transition-transform">
                 <ListTodo size={20} />
               </div>
               <div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Task Inbox</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Task Inbox</h3>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-[10px]">
+                  <div className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 font-bold text-[10px]">
                     {tasks.filter(t => t.isAnalyzed && !t.isCompleted).length}
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">Pending Tasks</span>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">Pending Tasks</span>
                 </div>
               </div>
             </div>
-            <button className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
+            <button className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-all">
               {isInboxExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
             </button>
           </div>
@@ -491,7 +536,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="mt-6 pt-6 border-t border-slate-50 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="mt-6 pt-6 border-t border-slate-50 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                   {tasks.filter(t => t.isAnalyzed && !t.isCompleted).map(t => (
                     <DraggableTaskItem 
                       key={t.id} 
@@ -678,17 +723,17 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                 <input type="time" required value={moveEndTime} onChange={e => setMoveEndTime(e.target.value)} className="w-full bg-white px-4 py-3 rounded-xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-600 text-sm" />
               </div>
               
-              {!movingEvent.isCommitment && (
+              {(!movingEvent.isCommitment || movingEvent.isCommitment) && (
                 <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-2xl">
                   <input 
                     type="checkbox" 
-                    id="complete-task"
+                    id="complete-item"
                     checked={moveIsCompleted}
                     onChange={(e) => setMoveIsCompleted(e.target.checked)}
                     className="w-5 h-5 rounded border-indigo-200 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <label htmlFor="complete-task" className="text-xs font-bold text-indigo-900 cursor-pointer">
-                    Mark as Completed
+                  <label htmlFor="complete-item" className="text-xs font-bold text-indigo-900 cursor-pointer">
+                    {movingEvent.isCommitment ? 'Mark Session as Completed' : 'Mark Task as Completed'}
                   </label>
                 </div>
               )}
@@ -774,15 +819,15 @@ function DraggableTaskItem({ task, isScheduled }: { task: Task, isScheduled: boo
       style={style}
       {...attributes}
       {...listeners}
-      className={`p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing ${isScheduled ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}
+      className={`p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing ${isScheduled ? 'bg-emerald-50 !bg-emerald-50 border-emerald-100' : 'bg-slate-50 !bg-slate-50 border-slate-100'}`}
     >
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[11px] font-bold text-slate-800 truncate">{task.title}</p>
+        <p className="text-[11px] font-bold text-black dark:text-black truncate">{task.title}</p>
         {isScheduled && <CalendarIcon size={12} className="text-emerald-500" />}
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-[8px] font-black uppercase text-indigo-400 tracking-tighter">Due: {task.deadline}</span>
-        <span className="text-[8px] font-black uppercase text-slate-400">{task.estimatedHours}h</span>
+        <span className="text-[8px] font-black uppercase text-black dark:text-black tracking-tighter opacity-70">Due: {task.deadline}</span>
+        <span className="text-[8px] font-black uppercase text-black dark:text-black opacity-60">{task.estimatedHours}h</span>
       </div>
     </div>
   );
@@ -850,7 +895,7 @@ function DraggableEventItem({
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: evt.id,
-    disabled: !!previewEvents || evt.isCommitment
+    disabled: !!previewEvents
   });
 
   const style = {
@@ -868,19 +913,16 @@ function DraggableEventItem({
       {...attributes}
       {...listeners}
       onClick={() => {
-        if (evt.isCommitment) return;
         onMove(evt); // Open edit modal instead of completing
       }}
-      className={`absolute left-1.5 right-1.5 p-2 rounded-xl border shadow-sm transition-all cursor-pointer hover:z-20 hover:scale-[1.02] flex flex-col group overflow-hidden ${colorClasses} ${task?.isCompleted ? 'opacity-40 grayscale-[0.5]' : ''}`}
+      className={`absolute left-1.5 right-1.5 p-2 rounded-xl border shadow-sm transition-all cursor-pointer hover:z-20 hover:scale-[1.02] flex flex-col group overflow-hidden ${colorClasses} ${task?.isCompleted || evt.isCompleted ? 'opacity-40 grayscale-[0.5]' : ''}`}
     >
       {/* Hover Tip */}
-      {!evt.isCommitment && (
-        <div className="absolute inset-0 bg-slate-900/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-2 text-center z-20">
-          <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
-            Click to edit session or status
-          </p>
-        </div>
-      )}
+      <div className="absolute inset-0 bg-slate-900/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-2 text-center z-20">
+        <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
+          Click to edit session or status
+        </p>
+      </div>
 
       <div className="flex justify-between items-start mb-1 relative z-10">
         <span className="text-[8px] font-black uppercase tracking-tighter opacity-70">
@@ -888,17 +930,15 @@ function DraggableEventItem({
         </span>
         {!previewEvents && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {!evt.isCommitment && (
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  onMove(evt);
-                }} 
-                className="text-slate-400 hover:text-indigo-600"
-              >
-                <Move size={10} />
-              </button>
-            )}
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                onMove(evt);
+              }} 
+              className="text-slate-400 hover:text-indigo-600"
+            >
+              <Move size={10} />
+            </button>
             <button onClick={(e) => { e.stopPropagation(); onDelete(evt.id); }} className="text-rose-400 hover:text-rose-600">
               <Trash2 size={10} />
             </button>
@@ -908,11 +948,9 @@ function DraggableEventItem({
       <p className="text-[10px] font-black leading-tight relative z-10 truncate">
         {evt.title}
       </p>
-      {!evt.isCommitment && (
-        <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity relative z-10">
-          <Move size={10} className="opacity-50" />
-        </div>
-      )}
+      <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity relative z-10">
+        <Move size={10} className="opacity-50" />
+      </div>
     </div>
   );
 }
