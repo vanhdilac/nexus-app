@@ -479,6 +479,28 @@ export default function App() {
 
       {/* Floating Buttons Container */}
       <div className="fixed bottom-24 md:bottom-8 right-8 z-[100] flex items-center gap-[10px]">
+        {/* Floating Theme Toggle Button */}
+        <button
+  onClick={async () => {
+    if (user) {
+      // Giữ nguyên logic cập nhật database và state của bạn
+      const updated = await authService.updateUser(user.id, { isDarkMode: !user.isDarkMode });
+      if (updated) setUser(updated);
+    }
+  }}
+  // Giữ nguyên các class layout và animation, chỉ đổi nhẹ màu text ở dark mode từ slate-300 lên slate-200 để sáng hơn
+  className="p-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-full shadow-2xl border border-slate-100 dark:border-slate-700 hover:scale-110 active:scale-95 transition-all group flex items-center justify-center"
+  title="Toggle Theme"
+>
+  {user?.isDarkMode ? (
+    /* Icon Mặt Trời: strokeWidth={2.5} để viền rõ nét hơn */
+    <Sun className="w-6 h-6 transition-transform group-hover:rotate-45" strokeWidth={2.5} />
+  ) : (
+    /* Icon Mặt Trăng: strokeWidth={2.8} để viền đậm hẳn lên như bạn muốn */
+    <Moon className="w-6 h-6 transition-transform group-hover:-rotate-12" strokeWidth={2.8} />
+  )}
+</button>
+
         {/* Floating Help Button */}
         {user.studentId !== 'AD020107' && (
           <button
