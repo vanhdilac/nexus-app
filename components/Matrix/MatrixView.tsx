@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { Task, EisenhowerQuadrant } from '../../types';
 import { taskService } from '../../services/taskService';
 import { QUADRANT_COLORS } from '../../constants';
-import { HelpCircle, Sparkles, GripVertical } from 'lucide-react';
+import { HelpCircle, Sparkles, GripVertical, Sun, Moon } from 'lucide-react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -22,7 +22,6 @@ interface MatrixViewProps {
 
 export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
   const [activeId, setActiveId] = React.useState<string | null>(null);
-  // Ref để theo dõi vị trí các ô nhằm scroll
   const quadrantRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   
   const sensors = useSensors(
@@ -55,7 +54,6 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
         isAnalyzed: true
       });
 
-      // Cuộn đến ô đích và cho nó nằm giữa màn hình
       setTimeout(() => {
         const targetElement = quadrantRefs.current[newQuadrant];
         if (targetElement) {
@@ -84,18 +82,17 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
           </div>
         </div>
 
-        {/* GLOBAL INBOX */}
         {unanalyzedTasks.length > 0 && (
           <div className="bg-accent rounded-[3rem] p-10 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-10 opacity-10">
               <Sparkles size={120} />
             </div>
-            <div className="flex items-center gap-4 mb-8 relative z-10 text-left">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+            <div className="flex items-center gap-4 mb-8 relative z-10 text-left text-white">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
                 <HelpCircle size={28} />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Unprioritized Tasks</h3>
+                <h3 className="text-2xl font-black uppercase tracking-tight">Unprioritized Tasks</h3>
                 <p className="text-indigo-100 text-sm font-bold opacity-80">{unanalyzedTasks.length} tasks waiting for AI analysis</p>
               </div>
             </div>
@@ -107,14 +104,13 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
           </div>
         )}
 
-        {/* THE EISENHOWER GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Quadrant 
             id={EisenhowerQuadrant.DO_FIRST}
             title="Do First" 
             subtitle="Urgent & Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.DO_FIRST)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.DO_FIRST]} 
+            colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.DO_FIRST])} 
             ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.DO_FIRST] = el)}
           />
           <Quadrant 
@@ -122,7 +118,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             title="Schedule" 
             subtitle="Important, Not Urgent" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.SCHEDULE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.SCHEDULE]} 
+            colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.SCHEDULE])} 
             ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.SCHEDULE] = el)}
           />
           <Quadrant 
@@ -130,7 +126,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             title="Delegate" 
             subtitle="Urgent, Not Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.DELEGATE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.DELEGATE]} 
+            colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.DELEGATE])} 
             ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.DELEGATE] = el)}
           />
           <Quadrant 
@@ -138,12 +134,11 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             title="Eliminate" 
             subtitle="Neither Urgent Nor Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.ELIMINATE)} 
-            colorClass={QUADRANT_COLORS[EisenhowerQuadrant.ELIMINATE]} 
+            colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.ELIMINATE])} 
             ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.ELIMINATE] = el)}
           />
         </div>
 
-        {/* Overlay khi đang kéo - KHÔNG GIẬT NGƯỢC, ĐỒNG NHẤT DARK MODE */}
         <DragOverlay dropAnimation={null}>
           {activeTask ? (
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-2xl border border-slate-100 dark:border-slate-700 w-[280px]">
@@ -200,7 +195,7 @@ const DraggableTask = ({ task }: { task: Task }) => {
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0 : 1, // Xóa bóng ma hoàn toàn
+    opacity: isDragging ? 0 : 1,
   };
 
   return (
@@ -209,7 +204,6 @@ const DraggableTask = ({ task }: { task: Task }) => {
       style={style}
       {...attributes}
       {...listeners}
-      /* w-[280px] cố định độ dài ngắn, Dark mode đồng nhất màu bg-white/slate-800 */
       className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm relative group cursor-grab active:cursor-grabbing border border-slate-100 dark:border-slate-700 transition-all w-[280px]"
     >
       <div className="flex items-center justify-between gap-3">
