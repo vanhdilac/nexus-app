@@ -4,14 +4,8 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!apiKey) {
-  throw new Error("Missing VITE_GEMINI_API_KEY in .env");
-}
-
 const ai = new GoogleGenAI({ 
-  apiKey
+  apiKey: (process.env as any).GEMINI_API_KEY 
 });
 // const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 // const aiInstance = new GoogleGenAI({ apiKey: key });
