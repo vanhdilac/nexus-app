@@ -49,6 +49,27 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
   
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setMessage(null);
+    try {
+      await storageService.deleteSelf(user.id);
+      // The page will reload or redirect because the user is deleted from Auth
+      // and the App.tsx onAuthStateChanged will trigger.
+      // However, we should probably force a logout or reload to be sure.
+      window.location.reload();
+    } catch (err) {
+      setMessage({ 
+        type: 'error', 
+        text: t('Failed to delete account. Please try again.', 'Xóa tài khoản thất bại. Vui lòng thử lại.') 
+      });
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -323,6 +344,27 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
             </form>
           </div>
 
+          {/* Danger Zone */}
+          <div className="bg-rose-50/50 dark:bg-rose-900/10 rounded-3xl p-8 border border-rose-100 dark:border-rose-900/30 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl text-rose-600 dark:text-rose-400">
+                <Trash2 size={20} />
+              </div>
+              <h2 className="text-xl font-bold text-rose-800 dark:text-rose-400">{t('Danger Zone', 'Khu vực nguy hiểm')}</h2>
+            </div>
+            <p className="text-sm text-rose-700/70 dark:text-rose-400/70 mb-6">
+              {t('Once you delete your account, there is no going back. Please be certain.', 'Một khi bạn xóa tài khoản, sẽ không thể khôi phục lại. Hãy chắc chắn về quyết định của mình.')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 dark:shadow-none"
+            >
+              <Trash2 size={18} />
+              <span>{t('Delete Account', 'Xóa tài khoản')}</span>
+            </button>
+          </div>
+
           <div className="bg-slate-50 dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800">
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t('Account Info', 'Thông tin tài khoản')}</h3>
             <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
@@ -341,6 +383,46 @@ export default function ProfileView({ user, onUserUpdated }: ProfileViewProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex items-center justify-center text-rose-600 dark:text-rose-400 mb-6 mx-auto">
+              <AlertCircle size={32} />
+            </div>
+            
+            <h3 className="text-2xl font-black text-slate-800 dark:text-white text-center mb-2">
+              {t('Delete Account?', 'Xóa tài khoản?')}
+            </h3>
+            <p className="text-slate-500 dark:text-slate-400 text-center mb-8 font-medium">
+              {t('All your data, including tasks, calendar events, and progress will be permanently removed. This action cannot be undone.', 'Tất cả dữ liệu của bạn, bao gồm nhiệm vụ, sự kiện lịch và tiến trình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.')}
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="w-full py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Trash2 size={18} />
+                )}
+                <span>{isDeleting ? t('Deleting...', 'Đang xóa...') : t('Yes, Delete My Account', 'Vâng, xóa tài khoản của tôi')}</span>
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="w-full py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all disabled:opacity-50"
+              >
+                {t('Cancel', 'Hủy bỏ')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

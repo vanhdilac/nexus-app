@@ -135,9 +135,13 @@ export default function TaskList({ tasks, calendar, userId, onTasksUpdated, onUs
     const updatedTask = { ...task, isCompleted: isNowCompleted };
     if (isNowCompleted) {
       updatedTask.completedAt = Date.now();
+      
+      // Delete all associated calendar events if task is completed
+      const updatedCalendar = calendar.filter(evt => evt.taskId !== task.id);
+      if (updatedCalendar.length !== calendar.length) {
+        await storageService.saveCalendarEvents(updatedCalendar, userId);
+      }
     } else {
-      // To remove a field in Firestore, we usually set it to deleteField() or just don't include it if using setDoc with merge: false
-      // But here we are using setDoc which overwrites. So we just omit it.
       delete updatedTask.completedAt;
     }
 

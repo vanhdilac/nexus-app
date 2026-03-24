@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Task, CalendarEvent, User, EisenhowerQuadrant } from '../../types';
 import { storageService } from '../../services/storageService';
 import { geminiService } from '../../services/geminiService';
@@ -71,22 +72,31 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewEvents, setPreviewEvents] = useState<CalendarEvent[] | null>(null);
   const [optimisticCalendar, setOptimisticCalendar] = useState<CalendarEvent[] | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragWidth, setDragWidth] = useState(0);
+  const [hoveredEvent, setHoveredEvent] = useState<{evt: CalendarEvent, x: number, y: number} | null>(null);
+
   const [showCommitmentForm, setShowCommitmentForm] = useState(false);
   const [movingEvent, setMovingEvent] = useState<CalendarEvent | null>(null);
-  
   const [moveDate, setMoveDate] = useState('');
   const [moveTime, setMoveTime] = useState('');
   const [moveEndTime, setMoveEndTime] = useState('');
   const [moveIsCompleted, setMoveIsCompleted] = useState(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Clear optimistic calendar when real data arrives with a small delay to prevent flickering
+  const lastUpdateRef = useRef<number>(0);
+
+  // Clear optimistic calendar only when real data arrives and we're not in the middle of an update
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setOptimisticCalendar(null);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [calendar]);
+    if (isUpdating) return;
+    if (optimisticCalendar) {
+      // Small delay to ensure the UI has rendered the new calendar prop
+      const timer = setTimeout(() => {
+        setOptimisticCalendar(null);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [calendar, isUpdating]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -98,6 +108,11 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
   const handleDragStart = (event: any) => {
     setActiveId(event.active.id);
+    // Measure the width of the element being dragged
+    const element = document.getElementById(`event-${event.active.id}`);
+    if (element) {
+      setDragWidth(element.offsetWidth);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -109,7 +124,8 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
       const [date, time] = (over.id as string).split('|');
       const newStartMins = timeToMinutes(time);
       
-      const existingEvent = calendar.find(e => e.id === activeId);
+      const currentEvents = previewEvents || calendar;
+      const existingEvent = currentEvents.find(e => e.id === activeId);
       let durationMinutes = 60;
       let originalEvent: CalendarEvent | null = null;
 
@@ -120,7 +136,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
       }
 
       const newEndMins = newStartMins + durationMinutes;
-      const dayEvents = calendar.filter(e => e.date === date && e.id !== activeId);
+      const dayEvents = currentEvents.filter(e => e.date === date && e.id !== activeId);
       
       // 1. Check for exact swap
       const swapTarget = dayEvents.find(e => 
@@ -128,10 +144,10 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
         timeToMinutes(e.endTime) === newEndMins
       );
 
-      let updatedCalendar = [...calendar];
+      let updatedEvents = [...currentEvents];
 
       if (swapTarget && originalEvent && originalEvent.date === date) {
-        updatedCalendar = calendar.map(e => {
+        updatedEvents = currentEvents.map(e => {
           if (e.id === activeId) return { ...e, startTime: swapTarget.startTime, endTime: swapTarget.endTime };
           if (e.id === swapTarget.id) return { ...e, startTime: originalEvent!.startTime, endTime: originalEvent!.endTime };
           return e;
@@ -167,8 +183,8 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
               return e;
             });
 
-            updatedCalendar = [
-              ...calendar.filter(e => e.date !== date && e.id !== activeId),
+            updatedEvents = [
+              ...currentEvents.filter(e => e.date !== date && e.id !== activeId),
               ...shiftedEvents
             ];
           } else {
@@ -190,26 +206,27 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
               return e;
             });
 
-            updatedCalendar = [
-              ...calendar.filter(e => e.date !== date && e.id !== activeId),
+            updatedEvents = [
+              ...currentEvents.filter(e => e.date !== date && e.id !== activeId),
               ...shiftedEvents
             ];
           }
         } else {
-          updatedCalendar = calendar.filter(e => e.id !== activeId);
+          updatedEvents = currentEvents.filter(e => e.id !== activeId);
         }
 
         // Add/Update the active event
+        const [y, m, d_num] = date.split('-').map(Number);
         const baseEvent = existingEvent || {
           id: crypto.randomUUID(),
           userId,
           taskId: tasks.find(t => t.id === activeId)?.id,
           title: tasks.find(t => t.id === activeId)?.title || 'New Event',
           isCommitment: false,
-          day: new Date(date).toLocaleDateString('en-US', { weekday: 'long' })
+          day: new Date(y, m - 1, d_num).toLocaleDateString('en-US', { weekday: 'long' })
         };
 
-        updatedCalendar.push({
+        updatedEvents.push({
           ...baseEvent,
           date,
           startTime: minutesToTime(newStartMins),
@@ -217,9 +234,16 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
         } as CalendarEvent);
       }
 
-      setOptimisticCalendar(updatedCalendar);
-      storageService.saveCalendarEvents(updatedCalendar, userId);
-      onCalendarUpdated();
+      if (previewEvents) {
+        setPreviewEvents(updatedEvents);
+      } else {
+        setIsUpdating(true);
+        setOptimisticCalendar(updatedEvents);
+        storageService.saveCalendarEvents(updatedEvents, userId);
+        onCalendarUpdated();
+        // Keep optimistic state for a bit to allow parent to update
+        setTimeout(() => setIsUpdating(false), 1000);
+      }
     }
   };
 
@@ -228,9 +252,10 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
+      const dateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
       return {
         date: d,
-        dateStr: d.toISOString().split('T')[0],
+        dateStr,
         label: d.toLocaleDateString('en-US', { weekday: 'short' }),
         dayNum: d.getDate()
       };
@@ -265,35 +290,30 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
     setIsGenerating(true);
     
-    // Simulate AI thinking
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     try {
       const existingCommitments = calendar.filter(e => e.isCommitment);
+      const todayStr = new Date().toISOString().split('T')[0];
       
-      // Try current week first
-      let currentWeekResults = schedulerService.autoSchedule(tasks, existingCommitments, weekStart, userId);
+      const aiResults = await geminiService.generateSchedule(tasks, existingCommitments, todayStr);
       
-      // Try next week for remaining tasks or if current week is full
-      const nextWeekStart = new Date(weekStart);
-      nextWeekStart.setDate(weekStart.getDate() + 7);
-      
-      // We need to combine the results. To do this properly, we should pass the newly scheduled events from week 1
-      // as "existing events" for week 2.
-      let nextWeekResults = schedulerService.autoSchedule(tasks, [...existingCommitments, ...currentWeekResults], nextWeekStart, userId);
-      
-      const totalResults = [...currentWeekResults, ...nextWeekResults];
+      const totalResults = aiResults.map(res => ({
+        ...res,
+        id: crypto.randomUUID(),
+        userId,
+        isCommitment: false,
+        day: new Date(res.date).toLocaleDateString('en-US', { weekday: 'long' })
+      })) as CalendarEvent[];
 
       if (totalResults.length === 0) {
-        setToast("No free slots available in the next 2 weeks! 😅");
+        setToast("No free slots available! 😅");
       } else {
-        setToast(`AI has optimized ${totalResults.length} study sessions for you in the next 2 weeks! ✨`);
-        // Only keep commitments from the original calendar and add the new AI results
+        setToast(`AI has optimized ${totalResults.length} study sessions for you! ✨`);
         setPreviewEvents([...existingCommitments, ...totalResults]);
       }
       
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
+      console.error(err);
       setToast("AI scheduling failed.");
       setTimeout(() => setToast(null), 3000);
     }
@@ -310,86 +330,42 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
     e.preventDefault();
     if (!movingEvent) return;
 
+    // If marked as completed, handle EXP and removal
+    if (moveIsCompleted) {
+      const result = await gamificationService.updateUserProgress(userId, 100);
+      if (result.user) onUserUpdated(result.user);
+      
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.7 },
+        colors: ['#f27024', '#3b82f6', '#10b981']
+      });
+
+      const updatedCalendar = calendar.filter(evt => evt.id !== movingEvent.id);
+      
+      // Check if this was the last session for this task
+      if (movingEvent.taskId) {
+        const remainingSessions = updatedCalendar.filter(evt => evt.taskId === movingEvent.taskId);
+        if (remainingSessions.length === 0) {
+          await storageService.deleteTask(movingEvent.taskId);
+          onTasksUpdated();
+        }
+      }
+
+      await storageService.saveCalendarEvents(updatedCalendar, userId);
+      onCalendarUpdated();
+      setMovingEvent(null);
+      document.body.style.overflow = 'auto';
+      return;
+    }
+
     const updated = calendar.map(evt => {
       if (evt.id === movingEvent.id) {
         return { ...evt, date: moveDate, startTime: moveTime, endTime: moveEndTime };
       }
       return evt;
     });
-
-    // Handle task completion toggle
-    if (!movingEvent.isCommitment && movingEvent.taskId) {
-      const task = tasks.find(t => t.id === movingEvent.taskId);
-      if (task && task.isCompleted !== moveIsCompleted) {
-        const updates: Partial<Task> = {
-          isCompleted: moveIsCompleted,
-          completedAt: moveIsCompleted ? Date.now() : undefined
-        };
-        const updatedTask = { ...task, ...updates };
-        await storageService.saveTask(updatedTask);
-        
-        const exp = gamificationService.calculateTaskExp(updatedTask);
-        const result = await gamificationService.updateUserProgress(userId, moveIsCompleted ? exp : -exp);
-        
-        if (result.user) {
-          onUserUpdated(result.user);
-          if (moveIsCompleted) {
-            confetti({
-              particleCount: 100,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#f27024', '#3b82f6', '#10b981']
-            });
-          }
-          if (result.leveledUp || result.rankedUp) {
-            setTimeout(() => {
-              confetti({
-                particleCount: 200,
-                spread: 100,
-                origin: { y: 0.5 },
-                colors: ['#FFD700', '#f27024']
-              });
-            }, 500);
-          }
-        }
-        onTasksUpdated();
-      }
-    } else if (movingEvent.isCommitment) {
-      // Handle commitment completion
-      if (movingEvent.isCompleted !== moveIsCompleted) {
-        const [sh, sm] = movingEvent.startTime.split(':').map(Number);
-        const [eh, em] = movingEvent.endTime.split(':').map(Number);
-        const durationHours = (eh - sh) + (em - sm) / 60;
-        const expGain = Math.floor(durationHours * 100);
-        
-        const result = await gamificationService.updateUserProgress(userId, moveIsCompleted ? expGain : -expGain);
-        
-        if (result.user) {
-          onUserUpdated(result.user);
-          if (moveIsCompleted) {
-            confetti({
-              particleCount: 100,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#f27024', '#3b82f6', '#10b981']
-            });
-          }
-        }
-        
-        // Update the event in the list
-        const updatedWithCompletion = updated.map(evt => {
-          if (evt.id === movingEvent.id) {
-            return { ...evt, isCompleted: moveIsCompleted, completedAt: moveIsCompleted ? Date.now() : undefined };
-          }
-          return evt;
-        });
-        storageService.saveCalendarEvents(updatedWithCompletion, userId);
-        onCalendarUpdated();
-        setMovingEvent(null);
-        document.body.style.overflow = 'auto';
-        return;
-      }
-    }
 
     storageService.saveCalendarEvents(updated, userId);
     onCalendarUpdated();
@@ -408,9 +384,25 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
     };
   }, [movingEvent, showCommitmentForm]);
 
-  const deleteEvent = (id: string) => {
+  const deleteEvent = async (id: string) => {
+    const eventToDelete = calendar.find(e => e.id === id);
+    if (!eventToDelete) return;
+
+    const result = await gamificationService.updateUserProgress(userId, 100);
+    if (result.user) onUserUpdated(result.user);
+    
     const updated = calendar.filter(e => e.id !== id);
-    storageService.saveCalendarEvents(updated, userId);
+    
+    // Check if this was the last session for this task
+    if (eventToDelete.taskId) {
+      const remainingSessions = updated.filter(evt => evt.taskId === eventToDelete.taskId);
+      if (remainingSessions.length === 0) {
+        await storageService.deleteTask(eventToDelete.taskId);
+        onTasksUpdated();
+      }
+    }
+
+    await storageService.saveCalendarEvents(updated, userId);
     onCalendarUpdated();
   };
 
@@ -491,12 +483,12 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
           {previewEvents ? (
             <div className="flex items-center gap-2">
               <button onClick={() => setPreviewEvents(null)} className="px-4 py-2 text-slate-400 font-bold text-xs uppercase tracking-widest">Discard</button>
-              <button onClick={() => { storageService.saveCalendarEvents(previewEvents, userId); setPreviewEvents(null); onCalendarUpdated(); }} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Save AI Week</button>
+              <button onClick={() => { storageService.saveCalendarEvents(previewEvents, userId); setPreviewEvents(null); onCalendarUpdated(); }} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">Save AI Plan</button>
             </div>
           ) : (
             <button onClick={handleGeneratePlan} disabled={isGenerating} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 flex items-center gap-2 disabled:opacity-50">
               {isGenerating ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
-              AI Week Planner
+              AI Planner
             </button>
           )}
         </div>
@@ -555,7 +547,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
           <div className="overflow-x-auto custom-scrollbar">
             <div className="w-full min-w-[800px] lg:min-w-0">
               {/* Day Header Row */}
-              <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50/50">
+              <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50/50 relative z-30">
                 <div className="border-r border-slate-100 flex items-center justify-center">
                   <Clock size={14} className="text-slate-300" />
                 </div>
@@ -589,7 +581,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
               </div>
 
               {/* Time Slots Body */}
-              <div className="grid grid-cols-[60px_repeat(7,1fr)] relative h-[800px] overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-[60px_repeat(7,1fr)] relative h-[800px] overflow-y-auto custom-scrollbar z-20">
                 {/* Hour Indicators */}
                 <div className="flex flex-col">
                   {timeSlots.map(time => (
@@ -622,7 +614,8 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                     }
                     return false;
                   });
-                  const isToday = d.dateStr === currentTime.toISOString().split('T')[0];
+                  const todayStr = `${currentTime.getFullYear()}-${(currentTime.getMonth() + 1).toString().padStart(2, '0')}-${currentTime.getDate().toString().padStart(2, '0')}`;
+                  const isToday = d.dateStr === todayStr;
                   const currentHour = currentTime.getHours();
                   const currentMin = currentTime.getMinutes();
                   const timeIndicatorTop = (currentHour - 7) * 80 + (currentMin / 60) * 80;
@@ -635,7 +628,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                           key={`${d.dateStr}|${time}`} 
                           id={`${d.dateStr}|${time}`} 
                           activeId={activeId}
-                          calendar={calendar}
+                          displayedEvents={displayedEvents}
                           tasks={tasks}
                         />
                       ))}
@@ -677,6 +670,8 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                               setMoveEndTime(evt.endTime);
                               setMoveIsCompleted(task?.isCompleted || false);
                             }}
+                            onHover={(evt, x, y) => setHoveredEvent({ evt, x, y })}
+                            onLeave={() => setHoveredEvent(null)}
                           />
                         );
                       })}
@@ -733,12 +728,25 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
                     className="w-5 h-5 rounded border-indigo-200 text-indigo-600 focus:ring-indigo-500"
                   />
                   <label htmlFor="complete-item" className="text-xs font-bold text-indigo-900 cursor-pointer">
-                    {movingEvent.isCommitment ? 'Mark Session as Completed' : 'Mark Task as Completed'}
+                    Mark Session as Completed (+100 EXP)
                   </label>
                 </div>
               )}
               
-              <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-indigo-100 mt-2">Save Changes</button>
+              <div className="flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    deleteEvent(movingEvent.id);
+                    setMovingEvent(null);
+                  }}
+                  className="flex-1 bg-rose-50 text-rose-600 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={14} />
+                  Delete Session
+                </button>
+                <button type="submit" className="flex-[2] bg-indigo-600 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-100">Save Changes</button>
+              </div>
             </form>
           </div>
         </div>
@@ -754,9 +762,9 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
       <DragOverlay dropAnimation={null}>
         {activeId ? (() => {
-          const evt = calendar.find(e => e.id === activeId);
+          const evt = displayedEvents.find(e => e.id === activeId);
           const task = tasks.find(t => t.id === activeId);
-          const title = evt?.title || task?.title || 'Moving...';
+          const title = evt?.title || task?.title || '';
           
           if (evt) {
             const colorClasses = getEventColor(evt);
@@ -766,15 +774,15 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
 
             return (
               <div 
-                className={`w-[100px] p-2 rounded-xl border shadow-2xl flex flex-col overflow-hidden scale-105 ${colorClasses}`}
-                style={{ height: `${height}px` }}
+                className={`p-2 rounded-xl border shadow-2xl flex flex-col overflow-hidden z-[5000] ${colorClasses}`}
+                style={{ height: `${height}px`, width: dragWidth ? `${dragWidth}px` : '120px' }}
               >
                 <div className="flex justify-between items-start mb-1">
                   <span className="text-[8px] font-black uppercase tracking-tighter opacity-70">
-                    {evt.startTime}
+                    {evt.startTime} - {evt.endTime}
                   </span>
                 </div>
-                <p className="text-[9px] font-black leading-tight">
+                <p className="text-[10px] font-black leading-tight">
                   {title}
                 </p>
               </div>
@@ -782,7 +790,7 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
           }
 
           return (
-            <div className="bg-white rounded-xl p-3 shadow-2xl border-2 border-orange-500 w-48 scale-105">
+            <div className="bg-white rounded-xl p-3 shadow-2xl border-2 border-orange-500 w-48 z-[500]">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] font-bold text-slate-800 truncate">{title}</p>
               </div>
@@ -796,6 +804,49 @@ export default function CalendarView({ tasks, userId, calendar, onCalendarUpdate
           );
         })() : null}
       </DragOverlay>
+
+      {/* Global Tooltip to avoid clipping */}
+      <AnimatePresence>
+        {hoveredEvent && !activeId && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="fixed pointer-events-none z-[9999] min-w-[240px] bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-2xl p-4 overflow-visible"
+            style={{ 
+              left: `${hoveredEvent.x}px`, 
+              top: `${hoveredEvent.y - 20}px`,
+              transform: 'translate(-50%, -100%)' 
+            }}
+          >
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${getEventColor(hoveredEvent.evt).split(' ')[0]}`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {hoveredEvent.evt.startTime} - {hoveredEvent.evt.endTime}
+                </span>
+              </div>
+              <h4 className="text-sm font-black text-slate-800 leading-tight">
+                {hoveredEvent.evt.title}
+              </h4>
+              {tasks.find(t => t.id === hoveredEvent.evt.taskId)?.description && (
+                <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                  {tasks.find(t => t.id === hoveredEvent.evt.taskId)?.description}
+                </p>
+              )}
+              <div className="h-px bg-slate-100 my-1" />
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-500">
+                  Click to edit session
+                </p>
+                <Move size={10} className="text-slate-400" />
+              </div>
+            </div>
+            {/* Arrow */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-[8px] border-transparent border-t-white/95" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
     </DndContext>
   );
@@ -833,7 +884,7 @@ function DraggableTaskItem({ task, isScheduled }: { task: Task, isScheduled: boo
   );
 }
 
-function DroppableTimeSlot({ id, activeId, calendar, tasks }: { id: string, activeId: string | null, calendar: CalendarEvent[], tasks: Task[] }) {
+function DroppableTimeSlot({ id, activeId, displayedEvents, tasks }: { id: string, activeId: string | null, displayedEvents: CalendarEvent[], tasks: Task[] }) {
   const { isOver, setNodeRef } = useDroppable({
     id: id,
   });
@@ -843,7 +894,7 @@ function DroppableTimeSlot({ id, activeId, calendar, tasks }: { id: string, acti
     if (!activeId || !isOver) return 80;
     
     // Check existing events
-    const evt = calendar.find(e => e.id === activeId);
+    const evt = displayedEvents.find(e => e.id === activeId);
     if (evt) {
       const [sh, sm] = evt.startTime.split(':').map(Number);
       const [eh, em] = evt.endTime.split(':').map(Number);
@@ -855,7 +906,7 @@ function DroppableTimeSlot({ id, activeId, calendar, tasks }: { id: string, acti
     if (task) return 80; // Default 1h for inbox tasks
     
     return 80;
-  }, [activeId, isOver, calendar, tasks]);
+  }, [activeId, isOver, displayedEvents, tasks]);
 
   return (
     <div 
@@ -881,7 +932,9 @@ function DraggableEventItem({
   previewEvents, 
   onComplete, 
   onDelete, 
-  onMove 
+  onMove,
+  onHover,
+  onLeave
 }: { 
   evt: CalendarEvent, 
   task?: Task, 
@@ -891,11 +944,12 @@ function DraggableEventItem({
   previewEvents: any, 
   onComplete: (evt: CalendarEvent) => void, 
   onDelete: (id: string) => void, 
-  onMove: (evt: CalendarEvent) => void 
+  onMove: (evt: CalendarEvent) => void,
+  onHover: (evt: CalendarEvent, x: number, y: number) => void,
+  onLeave: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: evt.id,
-    disabled: !!previewEvents
   });
 
   const style = {
@@ -908,27 +962,26 @@ function DraggableEventItem({
 
   return (
     <div 
+      id={`event-${evt.id}`}
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      onMouseEnter={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        onHover(evt, rect.left + rect.width / 2, rect.top);
+      }}
+      onMouseLeave={onLeave}
       onClick={() => {
         onMove(evt); // Open edit modal instead of completing
       }}
-      className={`absolute left-1.5 right-1.5 p-2 rounded-xl border shadow-sm transition-all cursor-pointer hover:z-20 hover:scale-[1.02] flex flex-col group overflow-hidden ${colorClasses} ${task?.isCompleted || evt.isCompleted ? 'opacity-40 grayscale-[0.5]' : ''}`}
+      className={`absolute left-1.5 right-1.5 p-2 rounded-xl border shadow-sm transition-all cursor-pointer hover:scale-[1.02] flex flex-col group overflow-visible ${colorClasses} ${task?.isCompleted || evt.isCompleted ? 'opacity-40 grayscale-[0.5]' : ''}`}
     >
-      {/* Hover Tip */}
-      <div className="absolute inset-0 bg-slate-900/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-2 text-center z-20">
-        <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
-          Click to edit session or status
-        </p>
-      </div>
-
-      <div className="flex justify-between items-start mb-1 relative z-10">
+      <div className={`flex justify-between items-start ${height < 45 ? 'mb-0' : 'mb-1'} relative z-10`}>
         <span className="text-[8px] font-black uppercase tracking-tighter opacity-70">
           {evt.startTime} - {evt.endTime}
         </span>
-        {!previewEvents && (
+        {!previewEvents && height >= 45 && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button 
               onClick={(e) => { 
@@ -945,12 +998,14 @@ function DraggableEventItem({
           </div>
         )}
       </div>
-      <p className="text-[10px] font-black leading-tight relative z-10 truncate">
+      <p className={`text-[10px] font-black leading-tight relative z-10 truncate ${height < 45 ? 'mt-0.5' : ''}`}>
         {evt.title}
       </p>
-      <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity relative z-10">
-        <Move size={10} className="opacity-50" />
-      </div>
+      {height >= 60 && (
+        <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity relative z-10">
+          <Move size={10} className="opacity-50" />
+        </div>
+      )}
     </div>
   );
 }

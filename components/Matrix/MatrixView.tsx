@@ -111,7 +111,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             subtitle="Urgent & Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.DO_FIRST)} 
             colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.DO_FIRST])} 
-            ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.DO_FIRST] = el)}
+            ref={(el) => { quadrantRefs.current[EisenhowerQuadrant.DO_FIRST] = el; }}
           />
           <Quadrant 
             id={EisenhowerQuadrant.SCHEDULE}
@@ -119,7 +119,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             subtitle="Important, Not Urgent" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.SCHEDULE)} 
             colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.SCHEDULE])} 
-            ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.SCHEDULE] = el)}
+            ref={(el) => { quadrantRefs.current[EisenhowerQuadrant.SCHEDULE] = el; }}
           />
           <Quadrant 
             id={EisenhowerQuadrant.DELEGATE}
@@ -127,7 +127,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             subtitle="Urgent, Not Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.DELEGATE)} 
             colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.DELEGATE])} 
-            ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.DELEGATE] = el)}
+            ref={(el) => { quadrantRefs.current[EisenhowerQuadrant.DELEGATE] = el; }}
           />
           <Quadrant 
             id={EisenhowerQuadrant.ELIMINATE}
@@ -135,7 +135,7 @@ export default function MatrixView({ tasks, onUpdateTask }: MatrixViewProps) {
             subtitle="Neither Urgent Nor Important" 
             tasks={getTasksByQuadrant(EisenhowerQuadrant.ELIMINATE)} 
             colorClass={String(QUADRANT_COLORS[EisenhowerQuadrant.ELIMINATE])} 
-            ref={(el) => (quadrantRefs.current[EisenhowerQuadrant.ELIMINATE] = el)}
+            ref={(el) => { quadrantRefs.current[EisenhowerQuadrant.ELIMINATE] = el; }}
           />
         </div>
 

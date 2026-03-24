@@ -16,8 +16,10 @@ export default function LeaderboardView({ currentUser }: LeaderboardViewProps) {
   useEffect(() => {
     const fetchUsers = async () => {
       const allUsers = await storageService.getAllUsers();
-      // Sort by total EXP descending
-      const sortedUsers = allUsers.sort((a, b) => b.exp - a.exp);
+      // Filter out admin and sort by total EXP descending
+      const sortedUsers = allUsers
+        .filter(u => u.studentId !== 'AD020107')
+        .sort((a, b) => b.exp - a.exp);
       setUsers(sortedUsers);
       setIsLoading(false);
     };

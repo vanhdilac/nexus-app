@@ -36,7 +36,7 @@ async function startServer() {
     }
 
     try {
-      // Verify the ID Token to ensure the requester is an admin
+      // Verify the ID Token
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       const adminEmail = decodedToken.email;
       
@@ -56,20 +56,31 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error deleting user from Auth:", error);
-      
-      // Check for disabled Identity Toolkit API
-      if (error.message?.includes('identitytoolkit.googleapis.com') || error.code === 'auth/internal-error') {
-        const projectId = admin.app().options.projectId;
-        const activationUrl = `https://console.developers.google.com/apis/api/identitytoolkit.googleapis.com/overview?project=${projectId}`;
-        
-        return res.status(500).json({ 
-          error: "Identity Toolkit API is disabled. Admin must enable it to delete accounts.",
-          activationUrl: activationUrl,
-          instruction: "Please visit the activation URL and click 'ENABLE' to allow account deletion."
-        });
-      }
-
       res.status(500).json({ error: error.message || "Failed to delete user from Auth" });
+    }
+  });
+
+  // API Route for a user to delete their own account
+  app.post("/api/user/delete-self", async (req, res) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ error: "ID Token is required" });
+    }
+
+    try {
+      // Verify the ID Token
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+
+      // Delete the user from Firebase Auth
+      await admin.auth().deleteUser(uid);
+      console.log(`User ${uid} successfully deleted their own account`);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting self from Auth:", error);
+      res.status(500).json({ error: error.message || "Failed to delete account" });
     }
   });
 

@@ -65,6 +65,19 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+function stripUndefined(obj: any): any {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripUndefined);
+  
+  const newObj: any = {};
+  Object.keys(obj).forEach(key => {
+    if (obj[key] !== undefined) {
+      newObj[key] = typeof obj[key] === 'object' ? stripUndefined(obj[key]) : obj[key];
+    }
+  });
+  return newObj;
+}
+
 export const storageService = {
   getUser: async (userId: string): Promise<User | null> => {
     const path = `users/${userId}`;
@@ -81,7 +94,7 @@ export const storageService = {
   saveUser: async (user: User): Promise<void> => {
     const path = `users/${user.id}`;
     try {
-      await setDoc(doc(db, 'users', user.id), user);
+      await setDoc(doc(db, 'users', user.id), stripUndefined(user));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
     }
@@ -102,7 +115,7 @@ export const storageService = {
   saveTask: async (task: Task): Promise<void> => {
     const path = `tasks/${task.id}`;
     try {
-      await setDoc(doc(db, 'tasks', task.id), task);
+      await setDoc(doc(db, 'tasks', task.id), stripUndefined(task));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
     }
@@ -142,7 +155,7 @@ export const storageService = {
       const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, 'calendar', d.id)));
       await Promise.all(deletePromises);
 
-      const savePromises = events.map(event => setDoc(doc(db, 'calendar', event.id), event));
+      const savePromises = events.map(event => setDoc(doc(db, 'calendar', event.id), stripUndefined(event)));
       await Promise.all(savePromises);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -152,7 +165,7 @@ export const storageService = {
   saveFeedback: async (feedback: Feedback): Promise<void> => {
     const path = `feedback/${feedback.id}`;
     try {
-      await setDoc(doc(db, 'feedback', feedback.id), feedback);
+      await setDoc(doc(db, 'feedback', feedback.id), stripUndefined(feedback));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
     }
@@ -241,6 +254,43 @@ export const storageService = {
       }
       
       console.log(`Successfully deleted all Firestore data for user ${userId}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  deleteSelf: async (userId: string): Promise<void> => {
+    const path = `users/${userId}`;
+    try {
+      // 1. Delete user from Firebase Auth via our API
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        const response = await fetch('/api/user/delete-self', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to delete account from Auth");
+        }
+      }
+
+      // 2. Delete user doc from Firestore
+      await deleteDoc(doc(db, 'users', userId));
+      
+      // 3. Delete associated data
+      const collections = ['tasks', 'calendar', 'feedback'];
+      for (const colName of collections) {
+        const q = query(collection(db, colName), where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, colName, d.id)));
+        await Promise.all(deletePromises);
+      }
+      
+      console.log(`Successfully deleted all data for user ${userId}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }

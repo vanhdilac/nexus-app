@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Task, CalendarEvent, Rank } from './types';
 import { storageService } from './services/storageService';
 import { authService } from './services/authService';
+import { gamificationService } from './services/gamificationService';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import AuthScreen from './components/AuthScreen';
@@ -113,25 +114,146 @@ export default function App() {
     }
   }, [user?.id]);
 
-  // Auto-delete logic: 15 minutes after completion
-  useEffect(() => {
-    if (user && tasks.length > 0) {
-      const interval = setInterval(() => {
-        const now = Date.now();
-        const fifteenMinutes = 15 * 60 * 1000;
-        
-        tasks.forEach(task => {
-          if (task.isCompleted && task.completedAt) {
-            if (now - task.completedAt >= fifteenMinutes) {
-              storageService.deleteTask(task.id);
-            }
-          }
-        });
-      }, 60000); // Check every minute
+  const notifiedIdsRef = React.useRef(new Set<string>());
 
-      return () => clearInterval(interval);
+  // Notification and Auto-delete logic
+  const [hasInteracted, setHasInteracted] = useState(false);
+
+  useEffect(() => {
+    const handleInteraction = () => {
+      setHasInteracted(true);
+      // Remove listener after first interaction
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+
+    window.addEventListener('click', handleInteraction);
+    window.addEventListener('keydown', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Request notification permission
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
     }
-  }, [user, tasks]);
+
+    const playNotificationSound = () => {
+      if (!hasInteracted) {
+        console.warn("Audio play deferred: waiting for user interaction.");
+        return;
+      }
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+      audio.play().catch(e => {
+        if (e.name === 'NotAllowedError') {
+          console.warn("Audio play blocked by browser. User interaction required.");
+        } else {
+          console.error("Audio play failed:", e);
+        }
+      });
+    };
+
+    const checkNotifications = async () => {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      // 1. Session Start Reminders (5 mins before)
+      calendar.forEach(evt => {
+        if (evt.date === todayStr && !evt.isCompleted) {
+          const [startH, startM] = evt.startTime.split(':').map(Number);
+          const startTimeDate = new Date(now);
+          startTimeDate.setHours(startH, startM, 0, 0);
+          
+          const diffMins = (startTimeDate.getTime() - now.getTime()) / (1000 * 60);
+          
+          if (diffMins > 0 && diffMins <= 5 && !notifiedIdsRef.current.has(evt.id + '_start')) {
+            new Notification("Sắp đến giờ học! 📚", {
+              body: `Phiên học "${evt.title}" sẽ bắt đầu trong ${Math.round(diffMins)} phút nữa!`,
+              icon: '/favicon.ico'
+            });
+            playNotificationSound();
+            notifiedIdsRef.current.add(evt.id + '_start');
+          }
+        }
+      });
+
+      // 2. Session End & Auto-delete (Expiration)
+      const sessionsToDelete: string[] = [];
+      const taskIdsToCheck = new Set<string>();
+
+      for (const evt of calendar) {
+        if (evt.date === todayStr) {
+          const [endH, endM] = evt.endTime.split(':').map(Number);
+          const endTimeDate = new Date(now);
+          endTimeDate.setHours(endH, endM, 0, 0);
+
+          if (now >= endTimeDate && !notifiedIdsRef.current.has(evt.id + '_end')) {
+            new Notification("Phiên học đã hết hạn ⏰", {
+              body: `Phiên học "${evt.title}" đã kết thúc và được gỡ khỏi lịch.`,
+              icon: '/favicon.ico'
+            });
+            playNotificationSound();
+            notifiedIdsRef.current.add(evt.id + '_end');
+            sessionsToDelete.push(evt.id);
+            if (evt.taskId) taskIdsToCheck.add(evt.taskId);
+          }
+        } else if (evt.date < todayStr) {
+          // Also delete past sessions that were missed
+          sessionsToDelete.push(evt.id);
+          if (evt.taskId) taskIdsToCheck.add(evt.taskId);
+        }
+      }
+
+      if (sessionsToDelete.length > 0) {
+        const updatedCalendar = calendar.filter(e => !sessionsToDelete.includes(e.id));
+        await storageService.saveCalendarEvents(updatedCalendar, user.id);
+        
+        // Task cleanup: If all sessions of a task are gone, delete the task
+        for (const taskId of taskIdsToCheck) {
+          const remainingSessions = updatedCalendar.filter(e => e.taskId === taskId);
+          if (remainingSessions.length === 0) {
+            await storageService.deleteTask(taskId);
+          }
+        }
+      }
+
+      // 3. Overdue Tasks (6 PM on deadline day)
+      if (currentHour === 18 && currentMinute === 0) {
+        const tasksToDelete: string[] = [];
+        for (const task of tasks) {
+          if (task.deadline === todayStr && !task.isCompleted && !notifiedIdsRef.current.has(task.id + '_overdue')) {
+            new Notification("Đã quá hạn hoàn thành! ⚠️", {
+              body: `Hạn chót cho nhiệm vụ "${task.title}" đã qua. Nhiệm vụ đã được gỡ bỏ.`,
+              icon: '/favicon.ico'
+            });
+            playNotificationSound();
+            notifiedIdsRef.current.add(task.id + '_overdue');
+            tasksToDelete.push(task.id);
+          }
+        }
+
+        for (const id of tasksToDelete) {
+          await storageService.deleteTask(id);
+        }
+      }
+    };
+
+    const interval = setInterval(checkNotifications, 60000); // Check every minute
+    checkNotifications();
+
+    return () => clearInterval(interval);
+  }, [user?.id, calendar, tasks]);
 
   useEffect(() => {
     if (user) {
@@ -222,10 +344,6 @@ export default function App() {
   }
 
   const renderContent = () => {
-    if (user?.studentId === 'AD020107') {
-      return <AdminView currentUser={user} />;
-    }
-
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
@@ -246,7 +364,10 @@ export default function App() {
       case 'leaderboard':
         return <LeaderboardView currentUser={user} />;
       case 'admin':
-        return <AdminView currentUser={user} />;
+        if (user.studentId === 'AD020107' || user.email === 'vanhdilac@gmail.com') {
+          return <AdminView currentUser={user} />;
+        }
+        return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
       default:
         return <Dashboard tasks={tasks} user={user} onTabChange={setActiveTab} />;
     }
@@ -301,22 +422,20 @@ export default function App() {
 
 
         <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-          {user.studentId === 'AD020107' ? (
-            <NavItem icon={<Users size={20}/>} label="Accounts" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={isSidebarCollapsed} />
-          ) : (
-            <>
-              <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} collapsed={isSidebarCollapsed} specialIconColor="text-white" />
-              <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => setActiveTab('pomodoro')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => setActiveTab('ranked')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')} collapsed={isSidebarCollapsed} />
-              <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} collapsed={isSidebarCollapsed} />
-              
-              {!isSidebarCollapsed && <UpcomingExams tasks={tasks} />}
-            </>
+          <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => setActiveTab('matrix')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} collapsed={isSidebarCollapsed} specialIconColor="text-white" />
+          <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => setActiveTab('pomodoro')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => setActiveTab('ranked')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => setActiveTab('feedback')} collapsed={isSidebarCollapsed} />
+          
+          {(user.studentId === 'AD020107' || user.email === 'vanhdilac@gmail.com') && (
+            <NavItem icon={<Shield size={20} className="text-indigo-500" />} label="Admin Panel" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={isSidebarCollapsed} />
           )}
+
+          {!isSidebarCollapsed && <UpcomingExams tasks={tasks} />}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-100">
@@ -409,22 +528,20 @@ export default function App() {
               </div>
               
               <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
-                {user.studentId === 'AD020107' ? (
-                  <NavItem icon={<Users size={20}/>} label="Accounts" active={activeTab === 'admin'} onClick={() => { setActiveTab('admin'); setIsMenuOpen(false); }} />
-                ) : (
-                  <>
-                    <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => { setActiveTab('tasks'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => { setActiveTab('matrix'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setIsMenuOpen(false); }} specialIconColor="text-black" />
-                    <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => { setActiveTab('pomodoro'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => { setActiveTab('ranked'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => { setActiveTab('leaderboard'); setIsMenuOpen(false); }} />
-                    <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => { setActiveTab('feedback'); setIsMenuOpen(false); }} />
-                    
-                    <UpcomingExams tasks={tasks} />
-                  </>
+                <NavItem icon={<Activity size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsMenuOpen(false); }} />
+                <NavItem icon={<ClipboardList size={20}/>} label="Academic Tasks" active={activeTab === 'tasks'} onClick={() => { setActiveTab('tasks'); setIsMenuOpen(false); }} />
+                <NavItem icon={<LayoutGrid size={20}/>} label="The Matrix" active={activeTab === 'matrix'} onClick={() => { setActiveTab('matrix'); setIsMenuOpen(false); }} />
+                <NavItem icon={<Calendar size={20}/>} label="Study Planner" active={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setIsMenuOpen(false); }} specialIconColor="text-black" />
+                <NavItem icon={<Timer size={20}/>} label="Pomodoro" active={activeTab === 'pomodoro'} onClick={() => { setActiveTab('pomodoro'); setIsMenuOpen(false); }} />
+                <NavItem icon={<Shield size={20}/>} label="Ranked" active={activeTab === 'ranked'} onClick={() => { setActiveTab('ranked'); setIsMenuOpen(false); }} />
+                <NavItem icon={<Trophy size={20}/>} label="Leaderboard" active={activeTab === 'leaderboard'} onClick={() => { setActiveTab('leaderboard'); setIsMenuOpen(false); }} />
+                <NavItem icon={<MessageSquare size={20}/>} label="Feedback" active={activeTab === 'feedback'} onClick={() => { setActiveTab('feedback'); setIsMenuOpen(false); }} />
+                
+                {(user.studentId === 'AD020107' || user.email === 'vanhdilac@gmail.com') && (
+                  <NavItem icon={<Shield size={20} className="text-indigo-500" />} label="Admin Panel" active={activeTab === 'admin'} onClick={() => { setActiveTab('admin'); setIsMenuOpen(false); }} />
                 )}
+
+                <UpcomingExams tasks={tasks} />
               </nav>
 
               <div className="mt-auto pt-6 border-t border-slate-100">
@@ -475,6 +592,7 @@ export default function App() {
       <OnboardingModal 
         isOpen={showOnboarding} 
         onClose={handleCloseOnboarding} 
+        language={user.language || 'en'}
       />
 
       {/* Floating Buttons Container */}
@@ -517,7 +635,7 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Nav */}
-      {user.studentId !== 'AD020107' && (
+      {(user.studentId !== 'AD020107' && user.email !== 'vanhdilac@gmail.com') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-effect border-t border-slate-200 px-6 py-4 flex justify-between items-center z-[100]">
           <MobileNavItem icon={<Activity size={24}/>} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
           <MobileNavItem icon={<ClipboardList size={24}/>} active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />

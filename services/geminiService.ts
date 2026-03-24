@@ -4,14 +4,8 @@ import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Task, EisenhowerQuadrant, CalendarEvent } from "../types";
 import { taskService } from "./taskService";
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!apiKey) {
-  throw new Error("Missing VITE_GEMINI_API_KEY in .env");
-}
-
 const ai = new GoogleGenAI({ 
-  apiKey
+  apiKey: (process.env as any).GEMINI_API_KEY 
 });
 // const key = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 // const aiInstance = new GoogleGenAI({ apiKey: key });
@@ -95,41 +89,46 @@ export const geminiService = {
     return JSON.parse(response.text || '[]') as { taskId: string, quadrant: EisenhowerQuadrant, reasoning: string }[];
   },
 
-  generateSchedule: async (tasks: Task[], commitments: CalendarEvent[], weekStartDate: string, todayDate: string) => {
-    const analyzedTasks = tasks.filter(t => t.isAnalyzed).map(t => ({
+  generateSchedule: async (tasks: Task[], commitments: CalendarEvent[], todayDate: string) => {
+    const analyzedTasks = tasks.filter(t => t.isAnalyzed && !t.isCompleted).map(t => ({
       ...t,
       quadrant: taskService.calculateQuadrant(t)
     }));
-    
-    const prompt = `Act as an expert academic coach. Create a 7-DAY study schedule starting from ${weekStartDate}.
-    
-    CRITICAL SCHEDULING LOGIC (SPACED LEARNING):
-    1. SPACED LEARNING: For each task, spread the required study hours EVENLY across the days from the task's creation date until its deadline. 
-       - Example: If a task was created on March 18 and is due on March 21 (3 days gap), and needs 3 hours, schedule 1 hour on the 18th, 1 hour on the 19th, and 1 hour on the 20th.
-       - DO NOT cluster all hours on the day before the deadline.
-    2. COMMITMENT PRIORITY: Scan user commitments first. NEVER schedule academic tasks during commitment slots.
-    3. DEADLINE PROXIMITY: If a slot is taken by a commitment, find the NEAREST available free slot.
-    4. TODAY IS: ${todayDate}. Do not schedule anything in the past.
-    5. SUSTAINABILITY: Max 4 study sessions (4 hours total) per day.
 
-    CONSTRAINTS:
-    - SLOT DURATION: Each session MUST be 1 hour.
-    - BREAKS: 30-min gap between slots.
-    - FORMAT: YYYY-MM-DD.
-    - BLOCKED: 11:00-13:00 (Lunch), 17:00-19:00 (Dinner), and 22:00-07:00 (Sleep).
+    if (analyzedTasks.length === 0) return [];
+
+    // Find the latest deadline to know how far to plan
+    const lastDeadline = analyzedTasks.reduce((latest, task) => {
+      return task.deadline > latest ? task.deadline : latest;
+    }, todayDate);
     
+    const prompt = `Act as an expert academic coach. Create a study schedule starting from ${todayDate} until the final deadline of ${lastDeadline}.
+    
+    CRITICAL SCHEDULING LOGIC:
+    1. TOTAL HOURS FULFILLMENT: For each task, you MUST schedule the ENTIRE "Needs Xh total" amount. If a task needs 4 hours and there are 4 days until the deadline, you must schedule exactly 4 hours total (e.g., 1 hour each day).
+    2. SMART DISTRIBUTION: Distribute the total hours for each task evenly across ALL available days from ${todayDate} until its specific deadline. 
+    3. SESSION DURATION RULES: 
+       - DEFAULT session duration: 1 hour.
+       - If total hours / available days < 1 hour, use that average (e.g., 2h total over 4 days = 30 mins/day).
+       - MINIMUM session duration: 30 minutes. 
+       - PREFERRED durations: 40, 45, 50, or 60 minutes.
+    4. TIME SPREADING: Spread sessions throughout the day (08:00 to 21:00). Leave at least 1.5 - 3 hours of free time between sessions. Do not cluster everything in the morning.
+    5. COMMITMENT PRIORITY: NEVER schedule during user commitment slots.
+    6. TODAY IS: ${todayDate}. Do not schedule in the past.
+    7. SUSTAINABILITY: Max 6 study hours total per day.
+    8. BLOCKED TIMES: 22:00-07:00 (Sleep).
+
     TASKS TO SCHEDULE:
     ${analyzedTasks
       .sort((a, b) => a.deadline.localeCompare(b.deadline))
       .map(t => {
-        const createdDate = new Date(t.createdAt).toISOString().split('T')[0];
-        return `- [${t.quadrant}] "${t.title}" (Needs ${t.estimatedHours}h). CREATED: ${createdDate}, DUE: ${t.deadline}`;
+        return `- [${t.quadrant}] "${t.title}" (Needs ${t.estimatedHours}h total). DUE: ${t.deadline}`;
       }).join('\n')}
 
     USER COMMITMENTS (Do not overlap):
     ${commitments.map(c => `- ${c.title} on ${c.date} from ${c.startTime} to ${c.endTime}`).join('\n')}
 
-    Return a JSON array of events for the NEXT 7 DAYS from ${weekStartDate}.
+    Return a JSON array of events.
     Each event: taskId, title, startTime (HH:mm), endTime (HH:mm), date (YYYY-MM-DD).`;
 
     const response = await ai.models.generateContent({

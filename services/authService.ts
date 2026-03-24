@@ -12,6 +12,8 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
+import { getLocalDateString, getYesterdayDateString } from '@/utils/dateUtils';
+
 export const authService = {
   getCurrentUser: async (): Promise<User | null> => {
     const firebaseUser = auth.currentUser;
@@ -118,7 +120,7 @@ export const authService = {
   },
 
   checkAndUpdateStreak: async (user: User): Promise<User | null> => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const lastActive = user.lastActiveDate;
 
     // Ensure rank exists if it doesn't (for existing users)
@@ -135,9 +137,7 @@ export const authService = {
     }
 
     let newStreak = user.streak;
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = getYesterdayDateString();
 
     if (lastActive === yesterdayStr) {
       newStreak += 1;

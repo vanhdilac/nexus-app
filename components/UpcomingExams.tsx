@@ -16,7 +16,8 @@ export default function UpcomingExams({ tasks }: UpcomingExamsProps) {
   const getDaysLeft = (dateStr: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const examDate = new Date(dateStr);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const examDate = new Date(y, m - 1, d);
     examDate.setHours(0, 0, 0, 0);
     const diffTime = examDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

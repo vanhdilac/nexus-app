@@ -13,9 +13,9 @@ export default function PomodoroView({ user, onUserUpdated }: PomodoroViewProps)
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
-  const [tempHours, setTempHours] = useState(0);
-  const [tempMinutes, setTempMinutes] = useState(25);
-  const [tempSeconds, setTempSeconds] = useState(0);
+  const [tempHours, setTempHours] = useState<number | string>(0);
+  const [tempMinutes, setTempMinutes] = useState<number | string>(25);
+  const [tempSeconds, setTempSeconds] = useState<number | string>(0);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [showBreakPopup, setShowBreakPopup] = useState(false);
@@ -25,9 +25,9 @@ export default function PomodoroView({ user, onUserUpdated }: PomodoroViewProps)
   const t = (en: string, vi: string) => user.language === 'vi' ? vi : en;
 
   const handleSaveTime = () => {
-    const h = Math.max(0, Math.min(23, tempHours));
-    const m = Math.max(0, Math.min(59, tempMinutes));
-    const s = Math.max(0, Math.min(59, tempSeconds));
+    const h = Math.max(0, Math.min(23, Number(tempHours)));
+    const m = Math.max(0, Math.min(59, Number(tempMinutes)));
+    const s = Math.max(0, Math.min(59, Number(tempSeconds)));
     
     setHours(h);
     setMinutes(m);
@@ -196,8 +196,23 @@ export default function PomodoroView({ user, onUserUpdated }: PomodoroViewProps)
                   type="number" 
                   min="0"
                   max="23"
-                  value={tempHours || 0}
-                  onChange={(e) => setTempHours(parseInt(e.target.value) || 0)}
+                  value={tempHours === 0 && typeof tempHours === 'number' ? '0' : tempHours}
+                  onFocus={(e) => {
+                    if (tempHours === 0) setTempHours('');
+                    else e.target.select();
+                  }}
+                  onBlur={() => {
+                    if (tempHours === '') setTempHours(0);
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setTempHours('');
+                    } else {
+                      const num = parseInt(val);
+                      if (!isNaN(num)) setTempHours(Math.max(0, Math.min(23, num)));
+                    }
+                  }}
                   className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-transparent focus:border-accent rounded-2xl px-2 py-4 font-black text-white dark:text-white text-center text-xl transition-all outline-none"
                 />
               </div>
@@ -207,8 +222,23 @@ export default function PomodoroView({ user, onUserUpdated }: PomodoroViewProps)
                   type="number" 
                   min="0"
                   max="59"
-                  value={tempMinutes || 0}
-                  onChange={(e) => setTempMinutes(parseInt(e.target.value) || 0)}
+                  value={tempMinutes === 0 && typeof tempMinutes === 'number' ? '0' : tempMinutes}
+                  onFocus={(e) => {
+                    if (tempMinutes === 0) setTempMinutes('');
+                    else e.target.select();
+                  }}
+                  onBlur={() => {
+                    if (tempMinutes === '') setTempMinutes(0);
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setTempMinutes('');
+                    } else {
+                      const num = parseInt(val);
+                      if (!isNaN(num)) setTempMinutes(Math.max(0, Math.min(59, num)));
+                    }
+                  }}
                   className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-transparent focus:border-accent rounded-2xl px-2 py-4 font-black text-white dark:text-white text-center text-xl transition-all outline-none"
                 />
               </div>
@@ -218,8 +248,23 @@ export default function PomodoroView({ user, onUserUpdated }: PomodoroViewProps)
                   type="number" 
                   min="0"
                   max="59"
-                  value={tempSeconds || 0}
-                  onChange={(e) => setTempSeconds(parseInt(e.target.value) || 0)}
+                  value={tempSeconds === 0 && typeof tempSeconds === 'number' ? '0' : tempSeconds}
+                  onFocus={(e) => {
+                    if (tempSeconds === 0) setTempSeconds('');
+                    else e.target.select();
+                  }}
+                  onBlur={() => {
+                    if (tempSeconds === '') setTempSeconds(0);
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setTempSeconds('');
+                    } else {
+                      const num = parseInt(val);
+                      if (!isNaN(num)) setTempSeconds(Math.max(0, Math.min(59, num)));
+                    }
+                  }}
                   className="w-full bg-slate-50 dark:bg-slate-900 border-2 border-transparent focus:border-accent rounded-2xl px-2 py-4 font-black text-white dark:text-white text-center text-xl transition-all outline-none"
                 />
               </div>

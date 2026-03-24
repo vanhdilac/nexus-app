@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar as CalendarIcon, Clock, RefreshCw } from 'lucide-react';
 import { CalendarEvent } from '../../types';
 
+import { getLocalDateString } from '@/utils/dateUtils';
+
 interface NewCommitmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -13,16 +15,16 @@ interface NewCommitmentModalProps {
 
 export default function NewCommitmentModal({ isOpen, onClose, onAdd, userId }: NewCommitmentModalProps) {
   const [comTitle, setComTitle] = useState('');
-  const [comDate, setComDate] = useState(new Date().toISOString().split('T')[0]);
+  const [comDate, setComDate] = useState(getLocalDateString());
   const [comStart, setComStart] = useState('09:00');
   const [comEnd, setComEnd] = useState('10:00');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringDays, setRecurringDays] = useState<number[]>([]); // 0-6 (Sun-Sat)
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(getLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)));
 
   const resetForm = () => {
     setComTitle('');
-    setComDate(new Date().toISOString().split('T')[0]);
+    setComDate(getLocalDateString());
     setComStart('09:00');
     setComEnd('10:00');
     setIsRecurring(false);
