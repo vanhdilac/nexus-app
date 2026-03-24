@@ -139,6 +139,60 @@ async function startServer() {
     }
   });
 
+  // API Route for sending feedback email
+  app.post("/api/send-feedback-email", async (req, res) => {
+    const { feedback, user } = req.body;
+
+    if (!feedback || !user) {
+      return res.status(400).json({ error: "Feedback and user data are required" });
+    }
+
+    // Check if SMTP is configured
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.warn("SMTP is not configured. Feedback email will not be sent.");
+      return res.status(503).json({ 
+        error: "Email service is not configured."
+      });
+    }
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587"),
+        secure: process.env.SMTP_PORT === "465",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || '"Nexus Feedback" <no-reply@nexus.fpt.edu.vn>',
+        to: "nexus.team.fpt@gmail.com",
+        subject: `New Feedback from ${user.username} (${feedback.type})`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px;">
+            <h1 style="color: #f27024; text-align: center;">New Feedback Received</h1>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0;">
+              <p><strong>User:</strong> ${user.username} (${user.studentId})</p>
+              <p><strong>Type:</strong> ${feedback.type}</p>
+              <p><strong>Rating:</strong> ${feedback.rating}/5</p>
+              <p><strong>Message:</strong></p>
+              <p style="white-space: pre-wrap;">${feedback.message}</p>
+            </div>
+            <p style="font-size: 10px; color: #94a3b8; text-align: center;">Sent from Nexus Platform</p>
+          </div>
+        `,
+      };
+
+      await transporter.sendMail(mailOptions);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending feedback email:", error);
+      res.status(500).json({ error: "Failed to send feedback email" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
